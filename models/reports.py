@@ -1,74 +1,83 @@
 import os
 import pandas as pd
 import traceback
-from utils.common import DATA_PATH, ARCHIVES_PATH, REPORTS_PATH, logger
+from utils.common import DATA_PATH, logger
 
-# 查詢指定月份或日期範圍的所有數據
+# 獲取指定月份的數據
 def get_monthly_data(file_name, year=None, month=None, start_date=None, end_date=None):
-    try:
-        result_df = pd.DataFrame()
-        
-        # 決定篩選條件
-        if start_date and end_date:
-            # 使用日期範圍篩選
-            date_range = (start_date, end_date)
-            date_filter = lambda df: (df['日期'] >= pd.to_datetime(start_date)) & (df['日期'] <= pd.to_datetime(end_date))
-        else:
-            # 使用年月篩選
-            month_str = f"{year}-{month:02d}"
-            date_filter = lambda df: df['日期'].dt.strftime('%Y-%m') == month_str
-        
-        # 檢查當前數據目錄中是否有數據
-        current_file = os.path.join(DATA_PATH, file_name)
-        if os.path.exists(current_file):
-            try:
-                df = pd.read_excel(current_file)
-                if not df.empty:
-                    # 轉換日期欄位
-                    df['日期'] = pd.to_datetime(df['日期'])
-                    # 篩選指定範圍的數據
-                    filtered_df = df[date_filter(df)]
-                    # 合併到結果中
-                    result_df = pd.concat([result_df, filtered_df])
-            except Exception as e:
-                logger.error(f"讀取當前檔案 {file_name} 時出錯: {str(e)}")
-        
-        # 掃瞄所有封存目錄
-        for date_dir in os.listdir(ARCHIVES_PATH):
-            archive_dir = os.path.join(ARCHIVES_PATH, date_dir)
-            if os.path.isdir(archive_dir):
-                archived_file = os.path.join(archive_dir, file_name)
-                if os.path.exists(archived_file):
-                    try:
-                        df = pd.read_excel(archived_file)
-                        if not df.empty:
-                            # 轉換日期欄位
-                            df['日期'] = pd.to_datetime(df['日期'])
-                            # 篩選指定範圍的數據
-                            filtered_df = df[date_filter(df)]
-                            # 合併到結果中
-                            result_df = pd.concat([result_df, filtered_df])
-                    except Exception as e:
-                        logger.error(f"讀取封存檔案 {archived_file} 時出錯: {str(e)}")
-        
-        # 重置索引
-        if not result_df.empty:
-            result_df = result_df.reset_index(drop=True)
-            
-            # 記錄日誌
-            if start_date and end_date:
-                logger.info(f"已成功讀取 {start_date} 至 {end_date} 的 {file_name} 數據，共 {len(result_df)} 筆記錄")
-            else:
-                logger.info(f"已成功讀取 {year}年{month}月 的 {file_name} 數據，共 {len(result_df)} 筆記錄")
-        else:
-            if start_date and end_date:
-                logger.warning(f"找不到 {start_date} 至 {end_date} 的 {file_name} 數據")
-            else:
-                logger.warning(f"找不到 {year}年{month}月 的 {file_name} 數據")
-            
-        return result_df
+    """Read monthly data from the specified file.
     
+    Args:
+        file_name (str): The Excel file name to read from
+        year (int, optional): Year of the data. Defaults to None.
+        month (int, optional): Month of the data. Defaults to None.
+        start_date (str, optional): Start date for custom range in format 'YYYY-MM-DD'. Defaults to None.
+        end_date (str, optional): End date for custom range in format 'YYYY-MM-DD'. Defaults to None.
+    
+    Returns:
+        pandas.DataFrame: Filtered data for the specified month or date range
+    """
+    try:
+        # 檢查檔案是否存在
+        file_path = os.path.join(DATA_PATH, file_name)
+        if not os.path.exists(file_path):
+            logger.warning(f"檔案不存在: {file_path}")
+            return pd.DataFrame()
+        
+        # 讀取檔案
+        df = pd.read_excel(file_path)
+        
+        # 檢查欄位
+        if '日期' not in df.columns:
+            logger.error(f"檔案 {file_name} 缺少日期欄位")
+            return pd.DataFrame()
+        
+        # 根據欄位列表的時間範圍過濾數據
+        if start_date and end_date:
+            # 如果提供了起止日期，則範圍為: start_date <= 日期 <= end_date
+            mask = (df['日期'] >= start_date) & (df['日期'] <= end_date)
+            return df[mask]
+        elif year and month:
+            # 如果提供了年和月，則過濾或者建構出範圍給您
+            # 特別處理日期格式
+            if df['日期'].dtype == 'object':
+                # 如果日期欄位是字符串，嘗試轉換為 datetime
+                try:
+                    df['日期'] = pd.to_datetime(df['日期'])
+                except Exception as e:
+                    logger.error(f"轉換日期時出錯: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    return pd.DataFrame()
+            
+            # 過濾指定年月的數據
+            month_start = f"{year}-{month:02d}-01"
+            if month == 12:
+                next_month_start = f"{year+1}-01-01"
+            else:
+                next_month_start = f"{year}-{month+1:02d}-01"
+            
+            mask = (df['日期'] >= month_start) & (df['日期'] < next_month_start)
+            return df[mask]
+        else:
+            # 如果沒有提供任何過濾條件，返回所有數據
+            return df
     except Exception as e:
-        logger.error(f"取得數據時出錯: {str(e)}")
+        logger.error(f"讀取數據時出錯: {str(e)}")
         logger.error(traceback.format_exc())
         return pd.DataFrame()
+
+# 獲取退貨記錄
+def get_returns_data(year=None, month=None, start_date=None, end_date=None):
+    """Get returns data for the specified period.
+    
+    Args:
+        year (int, optional): Year of the data. Defaults to None.
+        month (int, optional): Month of the data. Defaults to None.
+        start_date (str, optional): Start date for custom range in format 'YYYY-MM-DD'. Defaults to None.
+        end_date (str, optional): End date for custom range in format 'YYYY-MM-DD'. Defaults to None.
+    
+    Returns:
+        pandas.DataFrame: Filtered returns data for the specified period
+    """
+    # 使用已有的 get_monthly_data 函數讀取退貨檔案
+    return get_monthly_data('returns.xlsx', year, month, start_date, end_date)

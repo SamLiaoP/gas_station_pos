@@ -5,6 +5,9 @@ from models.data_manager import get_staff_and_farmers, get_inventory
 from models.inventory import get_product_details
 from models.transactions import record_purchase, record_sale
 from models.report_generator import generate_reports
+import pandas as pd
+import os
+from datetime import datetime
 
 main_routes = Blueprint('main_routes', __name__)
 
@@ -55,6 +58,119 @@ def purchase():
     staff, farmers = get_staff_and_farmers()
     logger.info(f"訪問進貨頁面，加載員工列表{staff}和小農列表{farmers}")
     return render_template('purchase.html', staff=staff, farmers=farmers)
+
+# 退貨頁面
+@main_routes.route('/return_goods', methods=['GET', 'POST'])
+def return_goods():
+    if request.method == 'POST':
+        # 從表單提交中提取日期
+        date = request.form.get('date')
+        farmer = request.form.get('farmer')
+        product_name = request.form.get('product_name')
+        unit = request.form.get('unit')
+        quantity = float(request.form.get('quantity'))
+        staff = request.form.get('staff')
+        reason = request.form.get('reason', '')
+        
+        logger.info(f"退貨記錄：日期={date}, 廠商={farmer}, 產品={product_name}, 單位={unit}, 數量={quantity}, 員工={staff}, 原因={reason}")
+        
+        try:
+            # 先檢查庫存是否有足夠的該產品可以退貨
+            inventory = get_inventory()
+            matching_rows = inventory[(inventory['產品名稱'] == product_name) & (inventory['單位'] == unit) & (inventory['供應商'] == farmer)]
+            
+            if matching_rows.empty:
+                logger.error(f"找不到廠商 {farmer} 的產品 {product_name} 的 {unit} 單位庫存")
+                return f"找不到廠商 {farmer} 的產品 {product_name} 的 {unit} 單位庫存", 400
+            
+            current_quantity = matching_rows.iloc[0]['數量']
+            if current_quantity < quantity:
+                logger.error(f"庫存不足！當前庫存: {current_quantity} {unit}, 退貨數量: {quantity} {unit}")
+                return f"庫存不足！當前庫存: {current_quantity} {unit}, 退貨數量: {quantity} {unit}", 400
+            
+            # 從 DATA_PATH 獲取路徑
+            from utils.common import DATA_PATH
+            
+            # 確保退貨記錄檔案存在
+            returns_file = os.path.join(DATA_PATH, 'returns.xlsx')
+            if os.path.exists(returns_file):
+                returns_df = pd.read_excel(returns_file)
+            else:
+                # 如果檔案不存在，創建空的 DataFrame
+                returns_df = pd.DataFrame(columns=[
+                    '日期', '時間戳記', '供應商', '產品名稱', '單位', 
+                    '數量', '單價', '總價', '處理員工', '退貨原因'
+                ])
+            
+            # 取得單價（從庫存中獲取）
+            unit_price = matching_rows.iloc[0]['單價']
+            total_price = quantity * unit_price
+            
+            # 獲取台灣時間戳記
+            current_time = get_taiwan_time().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 新增退貨記錄
+            new_return = pd.DataFrame({
+                '日期': [date],
+                '時間戳記': [current_time],
+                '供應商': [farmer],
+                '產品名稱': [product_name],
+                '單位': [unit],
+                '數量': [quantity],
+                '單價': [unit_price],
+                '總價': [total_price],
+                '處理員工': [staff],
+                '退貨原因': [reason]
+            })
+            
+            # 將新記錄添加到現有記錄中
+            returns_df = pd.concat([returns_df, new_return], ignore_index=True)
+            
+            # 儲存退貨記錄
+            returns_df.to_excel(returns_file, index=False)
+            
+            # 更新庫存
+            idx = matching_rows.index[0]
+            inventory.at[idx, '數量'] = inventory.at[idx, '數量'] - quantity
+            
+            # 如果庫存為0，移除該項
+            if inventory.at[idx, '數量'] <= 0:
+                inventory = inventory.drop(idx)
+            
+            # 儲存更新後的庫存
+            inventory.to_excel(os.path.join(DATA_PATH, 'inventory.xlsx'), index=False)
+            
+            logger.info("退貨記錄成功")
+            return redirect(url_for('main_routes.select_operation'))
+        except Exception as e:
+            logger.error(f"退貨記錄發生錯誤: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return f"退貨記錄發生錯誤: {str(e)}", 500
+    
+    # 讀取廠商列表
+    staff, farmers = get_staff_and_farmers()
+    
+    # 讀取庫存，取得可退貨的商品清單
+    inventory = get_inventory()
+    products_by_farmer = {}
+    
+    # 為每個廠商創建可退貨產品列表
+    for farmer in farmers:
+        farmer_inventory = inventory[inventory['供應商'] == farmer]
+        if not farmer_inventory.empty:
+            products = []
+            for _, row in farmer_inventory.iterrows():
+                products.append({
+                    'name': row['產品名稱'],
+                    'unit': row['單位'],
+                    'quantity': row['數量'],
+                    'price': row['單價']
+                })
+            products_by_farmer[farmer] = products
+    
+    logger.info(f"訪問退貨頁面，加載員工列表{staff}和廠商清單")
+    return render_template('return_goods.html', staff=staff, farmers=farmers, products_by_farmer=products_by_farmer)
 
 # 銷售頁面
 @main_routes.route('/sale', methods=['GET', 'POST'])
@@ -107,6 +223,55 @@ def sale():
     logger.info(f"訪問銷售頁面，加載員工列表{staff}和產品列表{products}")
     return render_template('sale.html', staff=staff, products=products)
 
+# 班別銷售查詢頁面
+@main_routes.route('/shift_sales', methods=['GET', 'POST'])
+def shift_sales():
+    today = get_taiwan_time().strftime('%Y-%m-%d')
+    current_shift = get_current_shift()
+    
+    # 準備班別選項
+    shifts = ['早班', '午班', '晚班']
+    
+    # 初始化銷售數據
+    sales_data = None
+    total_sales_amount = 0
+    date = today
+    shift = current_shift
+    
+    if request.method == 'POST':
+        # 獲取選擇的日期和班別
+        date = request.form.get('date')
+        shift = request.form.get('shift')
+        
+        # 從 DATA_PATH 獲取路徑
+        from utils.common import DATA_PATH
+        
+        # 讀取銷售數據
+        sales_file = os.path.join(DATA_PATH, 'sales.xlsx')
+        if os.path.exists(sales_file):
+            sales_df = pd.read_excel(sales_file)
+            
+            # 過濾指定日期和班別的數據
+            mask = (sales_df['日期'] == date) & (sales_df['班別'] == shift)
+            sales_data = sales_df[mask]
+            
+            # 計算總銷售額
+            total_sales_amount = sales_data['總價'].sum() if not sales_data.empty else 0
+            
+            logger.info(f"查詢班別銷售：日期={date}, 班別={shift}, 找到 {len(sales_data)} 筆記錄")
+        else:
+            logger.warning(f"找不到銷售記錄文件：{sales_file}")
+    
+    # 將 DataFrame 轉換為可以在模板中使用的列表
+    sales_records = [] if sales_data is None or sales_data.empty else sales_data.to_dict('records')
+    
+    return render_template('shift_sales.html', 
+                           date=date, 
+                           shift=shift, 
+                           shifts=shifts, 
+                           sales_records=sales_records, 
+                           total_sales_amount=total_sales_amount)
+
 # 獲取產品詳情API
 @main_routes.route('/api/product_details/<product_name>')
 def api_product_details(product_name):
@@ -132,6 +297,45 @@ def api_product_details(product_name):
             return jsonify({"error": "找不到產品"}), 404
     except Exception as e:
         logger.error(f"獲取產品詳情時發生錯誤: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"error": f"發生錯誤: {str(e)}"}), 500
+
+# 獲取廠商產品API
+@main_routes.route('/api/farmer_products/<farmer_name>')
+def api_farmer_products(farmer_name):
+    try:
+        # 打印診斷信息
+        logger.info(f"API請求廠商產品：'{farmer_name}'")
+        
+        # 讀取庫存
+        inventory = get_inventory()
+        
+        # 篩選該廠商的產品
+        farmer_inventory = inventory[inventory['供應商'] == farmer_name]
+        
+        if farmer_inventory.empty:
+            logger.warning(f"找不到廠商 '{farmer_name}' 的庫存產品")
+            return jsonify({"error": "找不到廠商庫存"}), 404
+            
+        # 整理產品資訊
+        products = []
+        for _, row in farmer_inventory.iterrows():
+            products.append({
+                'name': row['產品名稱'],
+                'unit': row['單位'],
+                'quantity': row['數量'],
+                'price': row['單價']
+            })
+            
+        logger.info(f"回傳 API 結果: 找到 {len(products)} 個產品")
+        
+        # 特別設置正確的 Content-Type 以確保中文正確顯示
+        response = jsonify({"products": products})
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return response
+    except Exception as e:
+        logger.error(f"獲取廠商產品時發生錯誤: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({"error": f"發生錯誤: {str(e)}"}), 500

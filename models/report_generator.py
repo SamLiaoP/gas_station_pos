@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import traceback
 from models.data_manager import get_inventory
-from models.reports import get_monthly_data
+from models.reports import get_monthly_data, get_returns_data
 from utils.common import DATA_PATH, REPORTS_PATH, logger
 
 # 生成報表
@@ -19,6 +19,7 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
         # 讀取所有需要的數據
         sales_df = get_monthly_data('sales.xlsx', year, month, start_date, end_date)
         purchases_df = get_monthly_data('purchases.xlsx', year, month, start_date, end_date)
+        returns_df = get_returns_data(year, month, start_date, end_date)
         
         # 讀取員工和小農信息
         staff_farmers_path = os.path.join(DATA_PATH, 'staff_farmers.xlsx')
@@ -30,11 +31,11 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
         staff_farmers_df = pd.read_excel(staff_farmers_path)
         
         # 如果沒有數據，返回 False
-        if sales_df.empty and purchases_df.empty:
+        if sales_df.empty and purchases_df.empty and returns_df.empty:
             if start_date and end_date:
-                logger.warning(f"找不到 {start_date} 至 {end_date} 的銷售或進貨數據")
+                logger.warning(f"找不到 {start_date} 至 {end_date} 的銷售、進貨或退貨數據")
             else:
-                logger.warning(f"找不到 {year}年{month}月 的銷售或進貨數據")
+                logger.warning(f"找不到 {year}年{month}月 的銷售、進貨或退貨數據")
             return False, None, []
         
         # 準備報表目錄
@@ -90,22 +91,57 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
                 '分潤金額': [commission_amount]
             })], ignore_index=True)
         
-        # 3. 收支表月報
+        # 3. 收支表月報（移除總進貨成本）
         total_sales = sales_df['總價'].sum()
-        total_purchases = purchases_df['總價'].sum()
         staff_commission = staff_report['分潤金額'].sum()
         farmer_commission = farmer_report['分潤金額'].sum()
-        net_profit = total_sales - total_purchases - staff_commission - farmer_commission
+        net_profit = total_sales - staff_commission - farmer_commission
         
         financial_report = pd.DataFrame({
-            '項目': ['總營業額', '總進貨成本', '員工分潤', '廠商分潤', '淨利潤'],
-            '金額': [total_sales, total_purchases, staff_commission, farmer_commission, net_profit]
+            '項目': ['總營業額', '員工分潤', '廠商分潤', '淨利潤'],
+            '金額': [total_sales, staff_commission, farmer_commission, net_profit]
         })
         
-        # 儲存報表
+        # 儲存標準月報表
         farmer_report.to_excel(os.path.join(report_dir, '廠商月報.xlsx'), index=False)
         staff_report.to_excel(os.path.join(report_dir, '員工月報.xlsx'), index=False)
         financial_report.to_excel(os.path.join(report_dir, '收支表月報.xlsx'), index=False)
+        
+        # 4. 為每個廠商生成包含進退貨明細的報表
+        farmer_report_with_details = os.path.join(report_dir, '廠商進退貨明細報表.xlsx')
+        with pd.ExcelWriter(farmer_report_with_details) as writer:
+            # 先寫入廠商分潤總表
+            farmer_report.to_excel(writer, sheet_name='廠商分潤總表', index=False)
+            
+            # 為每個廠商添加進貨明細工作表
+            for _, farmer in farmers.iterrows():
+                farmer_name = farmer['名稱']
+                # 篩選該廠商的進貨記錄
+                farmer_purchases = purchases_df[purchases_df['供應商'] == farmer_name]
+                
+                if not farmer_purchases.empty:
+                    # 按照日期升序排序
+                    farmer_purchases = farmer_purchases.sort_values(by=['日期', '時間戳記'])
+                    # 將進貨明細寫入工作表
+                    farmer_purchases.to_excel(writer, sheet_name=f'{farmer_name}進貨明細', index=False)
+                else:
+                    # 如果沒有進貨記錄，創建空白工作表
+                    pd.DataFrame(columns=['日期', '時間戳記', '產品名稱', '單位', '數量', '單價', '總價', '收貨員工'])\
+                      .to_excel(writer, sheet_name=f'{farmer_name}進貨明細', index=False)
+                
+                # 篩選該廠商的退貨記錄
+                farmer_returns = returns_df[returns_df['供應商'] == farmer_name]
+                
+                # 為每個廠商添加退貨明細工作表
+                if not farmer_returns.empty:
+                    # 按照日期升序排序
+                    farmer_returns = farmer_returns.sort_values(by=['日期', '時間戳記'])
+                    # 將退貨明細寫入工作表
+                    farmer_returns.to_excel(writer, sheet_name=f'{farmer_name}退貨明細', index=False)
+                else:
+                    # 如果沒有退貨記錄，創建空白工作表
+                    pd.DataFrame(columns=['日期', '時間戳記', '供應商', '產品名稱', '單位', '數量', '單價', '總價', '處理員工', '退貨原因'])\
+                      .to_excel(writer, sheet_name=f'{farmer_name}退貨明細', index=False)
         
         # 準備報表檔案的下載連結
         report_files = [
@@ -120,6 +156,10 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
             {
                 'name': '收支表月報.xlsx',
                 'url': url_for_func('main_routes.download_report', path=os.path.join(report_dir_name, '收支表月報.xlsx'))
+            },
+            {
+                'name': '廠商進退貨明細報表.xlsx',
+                'url': url_for_func('main_routes.download_report', path=os.path.join(report_dir_name, '廠商進退貨明細報表.xlsx'))
             }
         ]
         
@@ -147,6 +187,10 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
                 farmer_purchases = purchases_df[purchases_df['供應商'] == farmer_name]
                 total_purchases = farmer_purchases['總價'].sum()
                 
+                # 篩選該小農的退貨記錄
+                farmer_returns = returns_df[returns_df['供應商'] == farmer_name]
+                total_returns = farmer_returns['總價'].sum() if not farmer_returns.empty else 0
+                
                 # 計算分潤金額
                 commission_amount = total_sales * commission_rate
                 
@@ -157,10 +201,11 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
                 # 創建 Excel 工作簿
                 detail_report_path = os.path.join(farmer_details_dir, f"{farmer_name}詳細報表.xlsx")
                 with pd.ExcelWriter(detail_report_path) as writer:
-                    # 1. 總覽工作表
+                    # 1. 總覽工作表（增加退貨總額信息）
                     summary_df = pd.DataFrame({
-                        '項目': ['小農名稱', '報表期間', '銷售總額', '進貨總額', '分潤比例', '分潤金額', '庫存價值'],
-                        '內容': [farmer_name, date_range_str, total_sales, total_purchases, f"{commission_rate:.2%}", commission_amount, inventory_value]
+                        '項目': ['小農名稱', '報表期間', '銷售總額', '進貨總額', '退貨總額', '分潤比例', '分潤金額', '庫存價值'],
+                        '內容': [farmer_name, date_range_str, total_sales, total_purchases, 
+                                total_returns, f"{commission_rate:.2%}", commission_amount, inventory_value]
                     })
                     summary_df.to_excel(writer, sheet_name='總覽', index=False)
                     
@@ -186,7 +231,17 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
                         pd.DataFrame(columns=['日期', '時間戳記', '班別', '產品名稱', '單位', '數量', '單價', '總價', '員工'])\
                           .to_excel(writer, sheet_name='銷售明細', index=False)
                     
-                    # 4. 庫存明細表
+                    # 4. 退貨明細表
+                    if not farmer_returns.empty:
+                        # 按照日期升序排序
+                        farmer_returns = farmer_returns.sort_values(by=['日期', '時間戳記'])
+                        farmer_returns.to_excel(writer, sheet_name='退貨明細', index=False)
+                    else:
+                        # 如果沒有退貨記錄，創建空白工作表
+                        pd.DataFrame(columns=['日期', '時間戳記', '供應商', '產品名稱', '單位', '數量', '單價', '總價', '處理員工', '退貨原因'])\
+                          .to_excel(writer, sheet_name='退貨明細', index=False)
+                    
+                    # 5. 庫存明細表
                     if not current_inventory.empty:
                         # 計算每個產品的庫存價值
                         inventory_cols = ['產品編號', '產品名稱', '單位', '數量', '單價']

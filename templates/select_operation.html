@@ -5,15 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>選擇操作 - 加油站小農POS系統</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* 使用 !important 確保我們的自定義按鈕樣式優先超過 style.css 中的樣式 */
+        .purchase-button {
+            background-color: #4CAF50 !important; /* 綠色 */
+        }
+        .purchase-button:hover {
+            background-color: #3d8b40 !important; /* 深綠色 */
+        }
+        
+        .return-button {
+            background-color: #795548 !important; /* 棕色 */
+        }
+        .return-button:hover {
+            background-color: #5D4037 !important; /* 深棕色 */
+        }
+        
+        .sale-button {
+            background-color: #2196F3 !important; /* 藍色 */
+        }
+        .sale-button:hover {
+            background-color: #0c7cd5 !important; /* 深藍色 */
+        }
+        
+        .inventory-button {
+            background-color: #FF9800 !important; /* 橙色 */
+        }
+        .inventory-button:hover {
+            background-color: #e68900 !important; /* 深橙色 */
+        }
+        
+        .shift-sales-button {
+            background-color: #9C27B0 !important; /* 紫色 */
+        }
+        .shift-sales-button:hover {
+            background-color: #7B1FA2 !important; /* 深紫色 */
+        }
+        
+        .report-button {
+            background-color: #F44336 !important; /* 紅色 */
+        }
+        .report-button:hover {
+            background-color: #d32f2f !important; /* 深紅色 */
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>請選擇操作</h1>
         <div class="buttons-container">
-            <button class="big-button" onclick="location.href='{{ url_for('main_routes.purchase') }}'">進貨登記</button>
-            <button class="big-button" onclick="location.href='{{ url_for('main_routes.sale') }}'">銷售登記</button>
-            <button class="big-button" onclick="location.href='{{ url_for('main_routes.inventory') }}'">查看庫存</button>
-            <button class="big-button" onclick="location.href='{{ url_for('main_routes.generate_reports_route') }}'">產生月報表</button>
+            <button class="big-button purchase-button" onclick="location.href='{{ url_for('main_routes.purchase') }}'">進貨登記</button>
+            <button class="big-button return-button" onclick="location.href='{{ url_for('main_routes.return_goods') }}'">退貨登記</button>
+            <button class="big-button sale-button" onclick="location.href='{{ url_for('main_routes.sale') }}'">銷售登記</button>
+            <button class="big-button inventory-button" onclick="location.href='{{ url_for('main_routes.inventory') }}'">查看庫存</button>
+            <button class="big-button shift-sales-button" onclick="location.href='{{ url_for('main_routes.shift_sales') }}'">班別銷售查詢</button>
+            <button class="big-button report-button" onclick="location.href='{{ url_for('main_routes.generate_reports_route') }}'">產生月報表</button>
         </div>
         <button class="back-button" onclick="location.href='{{ url_for('main_routes.index') }}'">返回首頁</button>
     </div>

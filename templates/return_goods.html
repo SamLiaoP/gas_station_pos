@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>退貨登記 - 加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .error {
+            border-color: red;
+            background-color: #ffeeee;
+        }
+        
+        .flex-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        
+        .form-container {
+            width: 60%;
+        }
+        
+        .inventory-container {
+            width: 35%;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .reason-textarea {
+            width: 100%;
+            height: 80px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>退貨登記</h1>
+        <div class="flex-container">
+            <div class="form-container">
+                <form method="POST" action="{{ url_for('main_routes.return_goods') }}" id="returnForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="date">日期:</label>
+                            <input type="date" id="date" name="date" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="farmer">廠商:</label>
+                            <select id="farmer" name="farmer" required>
+                                <option value="">請選擇廠商</option>
+                                {% for farmer in farmers %}
+                                <option value="{{ farmer }}">{{ farmer }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="product_name">產品名稱:</label>
+                            <select id="product_name" name="product_name" required disabled>
+                                <option value="">請先選擇廠商</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="unit">單位:</label>
+                            <select id="unit" name="unit" required disabled>
+                                <option value="">請先選擇產品</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="available_quantity">可退數量:</label>
+                            <input type="number" id="available_quantity" readonly>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quantity">退貨數量:</label>
+                            <input type="number" id="quantity" name="quantity" step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="staff">處理員工:</label>
+                            <select id="staff" name="staff" required>
+                                <option value="">請選擇員工</option>
+                                {% for s in staff %}
+                                <option value="{{ s }}">{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="reason">退貨原因:</label>
+                            <textarea id="reason" name="reason" class="reason-textarea" placeholder="請輸入退貨原因（選填）"></textarea>
+                        </div>
+                    </div>
+                    <div class="buttons-container">
+                        <button type="submit" class="submit-button">提交退貨</button>
+                        <button type="button" class="back-button" onclick="location.href='{{ url_for('main_routes.select_operation') }}'">返回</button>
+                    </div>
+                </form>
+            </div>
+            <div class="inventory-container">
+                <h2>可退貨產品清單</h2>
+                <div class="table-container">
+                    <table id="product-table">
+                        <thead>
+                            <tr>
+                                <th>產品名稱</th>
+                                <th>單位</th>
+                                <th>庫存數量</th>
+                                <th>單價</th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-list">
+                            <!-- 產品列表將由JavaScript動態生成 -->
+                            <tr>
+                                <td colspan="4" align="center">請先選擇廠商</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 將廠商產品資料轉換為JavaScript變數
+        const productsByFarmer = {
+            {% for farmer, products in products_by_farmer.items() %}
+                "{{ farmer }}": [
+                    {% for product in products %}
+                        {
+                            name: "{{ product.name }}",
+                            unit: "{{ product.unit }}",
+                            quantity: {{ product.quantity }},
+                            price: {{ product.price }}
+                        },
+                    {% endfor %}
+                ],
+            {% endfor %}
+        };
+        
+        // 頁面載入時自動設定當前日期
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            document.getElementById('date').value = formattedDate;
+        });
+        
+        // 當廠商選擇改變時
+        document.getElementById('farmer').addEventListener('change', function() {
+            const farmer = this.value;
+            const productSelect = document.getElementById('product_name');
+            const unitSelect = document.getElementById('unit');
+            const productTable = document.getElementById('product-list');
+            
+            // 重置產品選擇和單位選擇
+            productSelect.innerHTML = '<option value="">請選擇產品</option>';
+            unitSelect.innerHTML = '<option value="">請先選擇產品</option>';
+            productSelect.disabled = farmer === '';
+            unitSelect.disabled = true;
+            document.getElementById('available_quantity').value = '';
+            
+            // 更新產品表格
+            productTable.innerHTML = '';
+            
+            if (farmer && productsByFarmer[farmer]) {
+                const products = productsByFarmer[farmer];
+                
+                // 已顯示的產品名稱集合，用於防止重複
+                const productNames = new Set();
+                
+                // 填充產品表格
+                products.forEach(product => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${product.name}</td>
+                        <td>${product.unit}</td>
+                        <td>${product.quantity}</td>
+                        <td>${product.price}</td>
+                    `;
+                    productTable.appendChild(row);
+                    
+                    // 只有當該產品名稱之前沒有添加過時才添加到下拉菜單
+                    if (!productNames.has(product.name)) {
+                        const option = document.createElement('option');
+                        option.value = product.name;
+                        option.textContent = product.name;
+                        productSelect.appendChild(option);
+                        productNames.add(product.name);
+                    }
+                });
+            } else {
+                // 如果沒有選擇廠商或者廠商沒有庫存
+                const emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = `<td colspan="4" align="center">請選擇廠商或該廠商無可退貨產品</td>`;
+                productTable.appendChild(emptyRow);
+            }
+        });
+        
+        // 當產品選擇改變時
+        document.getElementById('product_name').addEventListener('change', function() {
+            const farmer = document.getElementById('farmer').value;
+            const productName = this.value;
+            const unitSelect = document.getElementById('unit');
+            
+            // 重置單位選擇
+            unitSelect.innerHTML = '<option value="">請選擇單位</option>';
+            unitSelect.disabled = productName === '';
+            document.getElementById('available_quantity').value = '';
+            
+            if (farmer && productName && productsByFarmer[farmer]) {
+                const products = productsByFarmer[farmer];
+                
+                // 篩選出所選產品的不同單位
+                const units = products.filter(p => p.name === productName);
+                
+                // 添加單位選項
+                units.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.unit;
+                    option.textContent = product.unit;
+                    option.dataset.quantity = product.quantity;
+                    option.dataset.price = product.price;
+                    unitSelect.appendChild(option);
+                });
+                
+                // 如果只有一個單位，自動選中
+                if (units.length === 1) {
+                    unitSelect.value = units[0].unit;
+                    // 觸發單位選擇事件
+                    unitSelect.dispatchEvent(new Event('change'));
+                }
+            }
+        });
+        
+        // 當單位選擇改變時
+        document.getElementById('unit').addEventListener('change', function() {
+            const unit = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            
+            if (unit && selectedOption.dataset.quantity) {
+                document.getElementById('available_quantity').value = selectedOption.dataset.quantity;
+                
+                // 設置退貨數量的最大值
+                const quantityInput = document.getElementById('quantity');
+                quantityInput.max = selectedOption.dataset.quantity;
+                quantityInput.placeholder = `最大 ${selectedOption.dataset.quantity}`;
+            } else {
+                document.getElementById('available_quantity').value = '';
+            }
+        });
+        
+        // 監聽表單提交
+        document.getElementById('returnForm').addEventListener('submit', function(e) {
+            const quantity = parseFloat(document.getElementById('quantity').value);
+            const availableQuantity = parseFloat(document.getElementById('available_quantity').value);
+            
+            // 檢查退貨數量是否超過可退數量
+            if (quantity > availableQuantity) {
+                e.preventDefault();
+                alert(`退貨數量(${quantity})不能超過可退數量(${availableQuantity})`);
+                document.getElementById('quantity').classList.add('error');
+            } else {
+                document.getElementById('quantity').classList.remove('error');
+            }
+            
+            // 檢查必填欄位
+            const requiredFields = ['farmer', 'product_name', 'unit', 'quantity', 'staff'];
+            let valid = true;
+            
+            requiredFields.forEach(field => {
+                const input = document.getElementById(field);
+                if (!input.value.trim()) {
+                    e.preventDefault();
+                    input.classList.add('error');
+                    valid = false;
+                } else {
+                    input.classList.remove('error');
+                }
+            });
+            
+            if (!valid) {
+                alert('請填寫所有必填欄位');
+            }
+        });
+    </script>
+</body>
+</html>
