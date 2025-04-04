@@ -55,8 +55,9 @@ def purchase():
             logger.error(traceback.format_exc())
             return f"進貨記錄發生錯誤: {str(e)}", 500
     
+    # 讀取員工和廠商列表
     staff, farmers = get_staff_and_farmers()
-    logger.info(f"訪問進貨頁面，加載員工列表{staff}和小農列表{farmers}")
+    logger.info(f"訪問進貨頁面，加載員工列表{staff}和廠商列表{farmers}")
     return render_template('purchase.html', staff=staff, farmers=farmers)
 
 # 退貨頁面
@@ -391,7 +392,7 @@ def generate_reports_route():
             end_date = request.form.get('end_date')
             date_range_str = f"{start_date} 至 {end_date}"
         
-        logger.info(f"開始生成報表：{date_range_str}，包含小農詳細報表: {generate_farmer_details}")
+        logger.info(f"開始生成報表：{date_range_str}，包含廠商詳細報表: {generate_farmer_details}")
         
         # 生成報表
         success, report_dir, report_files = generate_reports(

@@ -166,32 +166,32 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
         # 如果需要，生成小農詳細報表
         farmer_detail_files = []
         if generate_farmer_details:
-            # 為每個小農生成詳細報表
-            farmer_details_dir = os.path.join(report_dir, '小農詳細報表')
+            # 為每個廠商生成詳細報表
+            farmer_details_dir = os.path.join(report_dir, '廠商詳細報表')
             if not os.path.exists(farmer_details_dir):
                 os.makedirs(farmer_details_dir, exist_ok=True)
             
-            # 生成小農詳細報表
+            # 生成廠商詳細報表
             for _, farmer in farmers.iterrows():
                 farmer_name = farmer['名稱']
                 commission_rate = farmer['分潤比例']
                 
-                # 獲取庫存中屬於該小農的產品
+                # 獲取庫存中屬於該廠商的產品
                 farmer_products = inventory[inventory['供應商'] == farmer_name]['產品名稱'].unique().tolist()
                 
-                # 篩選該小農的銷售記錄
+                # 篩選該廠商的銷售記錄
                 farmer_sales = sales_df[sales_df['產品名稱'].isin(farmer_products)]
                 total_sales = farmer_sales['總價'].sum()
                 
-                # 篩選該小農的進貨記錄
+                # 篩選該廠商的進貨記錄
                 farmer_purchases = purchases_df[purchases_df['供應商'] == farmer_name]
                 total_purchases = farmer_purchases['總價'].sum()
                 
-                # 篩選該小農的退貨記錄
+                # 篩選該廠商的退貨記錄
                 farmer_returns = returns_df[returns_df['供應商'] == farmer_name]
                 total_returns = farmer_returns['總價'].sum() if not farmer_returns.empty else 0
                 
-                # 計算分潤金額
+                # 計算廠商分潤金額
                 commission_amount = total_sales * commission_rate
                 
                 # 計算庫存價值
@@ -203,7 +203,7 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
                 with pd.ExcelWriter(detail_report_path) as writer:
                     # 1. 總覽工作表（增加退貨總額信息）
                     summary_df = pd.DataFrame({
-                        '項目': ['小農名稱', '報表期間', '銷售總額', '進貨總額', '退貨總額', '分潤比例', '分潤金額', '庫存價值'],
+                        '項目': ['廠商名稱', '報表期間', '銷售總額', '進貨總額', '退貨總額', '分潤比例', '分潤金額', '庫存價值'],
                         '內容': [farmer_name, date_range_str, total_sales, total_purchases, 
                                 total_returns, f"{commission_rate:.2%}", commission_amount, inventory_value]
                     })
@@ -255,15 +255,15 @@ def generate_reports(year=None, month=None, start_date=None, end_date=None, gene
                           .to_excel(writer, sheet_name='庫存明細', index=False)
                 
                 # 記錄報表檔案路徑
-                relative_path = os.path.join(report_dir_name, '小農詳細報表', f"{farmer_name}詳細報表.xlsx")
+                relative_path = os.path.join(report_dir_name, '廠商詳細報表', f"{farmer_name}詳細報表.xlsx")
                 farmer_detail_files.append({
                     'name': f"{farmer_name}詳細報表.xlsx",
                     'url': url_for_func('main_routes.download_report', path=relative_path)
                 })
             
-            # 將小農詳細報表添加到下載列表
+            # 將廠商詳細報表添加到下載列表
             report_files.extend(farmer_detail_files)
-            logger.info(f"生成了 {len(farmer_detail_files)} 個小農詳細報表")
+            logger.info(f"生成了 {len(farmer_detail_files)} 個廠商詳細報表")
         
         logger.info(f"報表生成成功，儲存到 {report_dir}")
         return True, report_dir, report_files

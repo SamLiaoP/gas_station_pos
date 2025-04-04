@@ -141,14 +141,14 @@ def migrate_old_data():
         print("舊數據遷移完成，已保留原始目錄。您可以在確認新系統運行正常後手動刪除舊目錄。")
 
 # 運行初始化
-print(f"===== 加油站小農POS系統初始化 ({today_date}) =====")
+print(f"===== 加油站POS系統初始化 ({today_date}) =====")
 migrate_old_data()
 create_initial_files()
 print("數據初始化完成")
 
 # 啟動應用
 if __name__ == '__main__':
-    print("啟動加油站小農POS系統，請訪問 http://127.0.0.1:8080/")
+    print("啟動加油站POS系統，請訪問 http://127.0.0.1:8080/")
     # 如果需要在區域網內裡訪問，請將host設為'0.0.0.0'
     # 如果只在本機訪問，請使用'127.0.0.1'
     app.run(debug=True, host='0.0.0.0', port=8080)
