@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>進貨登記 - 加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>進貨登記</h1>
+        <form method="POST" action="{{ url_for('main_routes.purchase') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="date">日期:</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="farmer">小農（廠商）:</label>
+                    <select id="farmer" name="farmer" required>
+                        <option value="">請選擇廠商</option>
+                        {% for farmer in farmers %}
+                        <option value="{{ farmer }}">{{ farmer }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="product_name">貨品名:</label>
+                    <input type="text" id="product_name" name="product_name" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="unit">單位:</label>
+                    <input type="text" id="unit" name="unit" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="quantity">數量:</label>
+                    <input type="number" id="quantity" name="quantity" step="0.01" min="0" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="unit_price">單價:</label>
+                    <input type="number" id="unit_price" name="unit_price" step="0.01" min="0" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="total_price">總金額:</label>
+                    <input type="number" id="total_price" name="total_price" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="staff">收貨員工:</label>
+                    <select id="staff" name="staff" required>
+                        <option value="">請選擇員工</option>
+                        {% for s in staff %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="buttons-container">
+                <button type="submit" class="submit-button">提交進貨資料</button>
+                <button type="button" class="back-button" onclick="location.href='{{ url_for('main_routes.select_operation') }}'">返回</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // 頁面載入時自動設定當前日期
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            document.getElementById('date').value = formattedDate;
+        });
+        
+        // 計算總價
+        document.getElementById('quantity').addEventListener('input', calculateTotal);
+        document.getElementById('unit_price').addEventListener('input', calculateTotal);
+
+        function calculateTotal() {
+            const quantity = parseFloat(document.getElementById('quantity').value) || 0;
+            const unitPrice = parseFloat(document.getElementById('unit_price').value) || 0;
+            document.getElementById('total_price').value = (quantity * unitPrice).toFixed(2);
+        }
+
+        // 監聽表單提交
+        document.querySelector('form').addEventListener('submit', function(e) {
+            console.log('正在提交表單...');
+            // 確保所有必填欄位都已填寫
+            const requiredInputs = document.querySelectorAll('input[required], select[required]');
+            let valid = true;
+            
+            requiredInputs.forEach(input => {
+                if (!input.value) {
+                    valid = false;
+                    input.classList.add('error');
+                    alert(`請填寫 ${input.previousElementSibling.textContent} 欄位`);
+                } else {
+                    input.classList.remove('error');
+                }
+            });
+            
+            if (!valid) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>銷售登記 - 加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .unit-select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            width: 100%;
+        }
+        
+        .unit-select option {
+            padding: 5px;
+        }
+        
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>銷售登記</h1>
+        <div class="flex-container">
+            <div class="form-container">
+                <form method="POST" action="{{ url_for('main_routes.sale') }}" id="saleForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="date">日期:</label>
+                            <input type="date" id="date" name="date" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="shift">班別:</label>
+                            <select id="shift" name="shift" required>
+                                <option value="早班">早班</option>
+                                <option value="午班">午班</option>
+                                <option value="晚班">晚班</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="staff">銷售員工:</label>
+                            <select id="staff" name="staff" required>
+                                <option value="">請選擇員工</option>
+                                {% for s in staff %}
+                                <option value="{{ s }}">{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="product_name">品項:</label>
+                            <select id="product_name" name="product_name" required>
+                                <option value="">請選擇產品</option>
+                                {% for product in products %}
+                                <option value="{{ product }}">{{ product }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="unit">單位:</label>
+                            <select id="unit" name="unit" class="unit-select" required>
+                                <option value="">請先選擇產品</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quantity">數量:</label>
+                            <input type="number" id="quantity" name="quantity" step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    <div class="form-row" id="available_quantity_row">
+                        <div class="form-group">
+                            <label for="available_quantity">庫存數量:</label>
+                            <input type="number" id="available_quantity" readonly>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="unit_price">單價:</label>
+                            <input type="number" id="unit_price" name="unit_price" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="total_price">總金額:</label>
+                            <input type="number" id="total_price" name="total_price" readonly>
+                        </div>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="submit" class="submit-button">提交銷售資料</button>
+                        <button type="button" class="refresh-button" onclick="loadInventory()">刷新庫存</button>
+                        <button type="button" class="back-button" onclick="location.href='{{ url_for('main_routes.select_operation') }}'">返回</button>
+                    </div>
+                </form>
+                
+                <!-- 調試信息區 -->
+                <div class="debug-info" id="debugInfo">
+                    <h3>API回傳數據（調試用）:</h3>
+                    <pre id="debugData"></pre>
+                </div>
+            </div>
+            <div class="inventory-container">
+                <h2>現有庫存</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>產品名稱</th>
+                                <th>單位</th>
+                                <th>庫存數量</th>
+                                <th>單價</th>
+                                <th>供應商</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-list">
+                            <!-- 庫存列表將由JavaScript加載 -->
+                        </tbody>
+                    </table>
+                </div>
+                <button onclick="location.href='{{ url_for('main_routes.inventory') }}'" class="view-button">查看完整庫存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 用於儲存當前產品的詳情
+        let currentProductDetails = null;
+        
+        // 用來展示或隱藏庫存訊息列
+        function toggleAvailableQuantity(show) {
+            const availableRow = document.getElementById('available_quantity_row');
+            if (availableRow) {
+                availableRow.style.display = show ? 'block' : 'none';
+            }
+        }
+        
+        // 顯示/隱藏調試資訊
+        function toggleDebugInfo(show, data) {
+            const debugInfo = document.getElementById('debugInfo');
+            const debugData = document.getElementById('debugData');
+            
+            if (debugInfo && debugData) {
+                debugInfo.style.display = show ? 'block' : 'none';
+                if (data) {
+                    debugData.textContent = JSON.stringify(data, null, 2);
+                }
+            }
+        }
+        
+        // 頁面載入時自動設定當前日期和班別
+        document.addEventListener('DOMContentLoaded', function() {
+            // 設定當前日期
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            document.getElementById('date').value = formattedDate;
+            
+            // 根據當前時間設定班別
+            const hour = today.getHours();
+            let shift = '早班';
+            if (hour >= 14 && hour < 22) {
+                shift = '午班';
+            } else if (hour >= 22 || hour < 6) {
+                shift = '晚班';
+            }
+            document.getElementById('shift').value = shift;
+            
+            // 一旦頁面加載，加載庫存資料
+            loadInventory();
+        });
+
+        // 加載庫存資料
+        function loadInventory() {
+            fetch('{{ url_for('main_routes.api_inventory') }}')
+                .then(response => response.json())
+                .then(data => {
+                    const inventoryList = document.getElementById('inventory-list');
+                    inventoryList.innerHTML = '';
+                    
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item['產品名稱']}</td>
+                            <td>${item['單位']}</td>
+                            <td>${item['數量']}</td>
+                            <td>${item['單價']}</td>
+                            <td>${item['供應商']}</td>
+                        `;
+                        inventoryList.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    console.error('加載庫存時出錯:', error);
+                });
+        }
+
+        // 產品選擇變更時獲取詳情
+        document.getElementById('product_name').addEventListener('change', function() {
+            const productName = this.value;
+            if (productName) {
+                console.log('選擇產品：', productName);
+                
+                // 先清空單位選擇器
+                const unitSelect = document.getElementById('unit');
+                unitSelect.innerHTML = '<option value="">加載中...</option>';
+                
+                // 發起API請求，獲取產品詳情
+                fetch(`{{ url_for('main_routes.api_product_details', product_name='') }}${encodeURIComponent(productName)}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json; charset=utf-8'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP 錯誤：${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 儲存當前產品詳情
+                    currentProductDetails = data;
+                    console.log('產品詳情回傳成功:', data);
+                    
+                    // 顯示調試資訊（開發環境）
+                    toggleDebugInfo(false, data);
+                    
+                    // 更新單位下拉選單
+                    unitSelect.innerHTML = '';  // 清空現有選項
+                    
+                    // 檢查單位資料
+                    if (data.units && Array.isArray(data.units) && data.units.length > 0) {
+                        console.log(`找到 ${data.units.length} 種單位: ${data.units.join(', ')}`);
+                        
+                        // 逐個添加單位選項
+                        data.units.forEach(unit => {
+                            const option = document.createElement('option');
+                            option.value = unit;
+                            option.textContent = unit;
+                            unitSelect.appendChild(option);
+                        });
+                        
+                        // 選中第一個單位
+                        unitSelect.value = data.units[0];
+                        
+                        // 根據選中的單位更新價格和庫存信息
+                        updatePriceAndQuantity(data.units[0]);
+                    } else {
+                        console.error('沒有找到單位資料或格式錯誤:', data);
+                        unitSelect.innerHTML = '<option value="">無單位資料</option>';
+                        document.getElementById('unit_price').value = '';
+                        document.getElementById('available_quantity').value = '';
+                        document.getElementById('total_price').value = '';
+                    }
+                    
+                    // 重新加載庫存資料
+                    loadInventory();
+                })
+                .catch(error => {
+                    console.error('獲取產品詳情時出錯:', error);
+                    
+                    // 設置錯誤信息到單位選擇器
+                    unitSelect.innerHTML = '<option value="">無法獲取單位資料</option>';
+                    document.getElementById('unit_price').value = '';
+                    document.getElementById('available_quantity').value = '';
+                    document.getElementById('total_price').value = '';
+                });
+            } else {
+                // 重置所有字段
+                document.getElementById('unit').innerHTML = '<option value="">請先選擇產品</option>';
+                document.getElementById('unit_price').value = '';
+                document.getElementById('available_quantity').value = '';
+                document.getElementById('total_price').value = '';
+            }
+        });
+
+        // 數量變更時計算總價
+        document.getElementById('quantity').addEventListener('input', function() {
+            calculateTotal();
+        });
+        
+        // 單價變更時計算總價
+        document.getElementById('unit_price').addEventListener('input', function() {
+            calculateTotal();
+        });
+
+        // 計算總價並檢查庫存
+        function calculateTotal() {
+            const quantity = parseFloat(document.getElementById('quantity').value) || 0;
+            const unitPrice = parseFloat(document.getElementById('unit_price').value) || 0;
+            const availableQuantity = parseFloat(document.getElementById('available_quantity').value) || 0;
+            
+            // 確保不超過庫存
+            if (quantity > availableQuantity && availableQuantity > 0) {
+                alert('超過庫存量！已自動調整為庫存最大數量。');
+                document.getElementById('quantity').value = availableQuantity;
+                document.getElementById('total_price').value = (availableQuantity * unitPrice).toFixed(2);
+                return;
+            }
+            
+            document.getElementById('total_price').value = (quantity * unitPrice).toFixed(2);
+        }
+        
+        // 更新價格和庫存信息
+        function updatePriceAndQuantity(selectedUnit) {
+            if (currentProductDetails && currentProductDetails.units_info) {
+                // 尋找所選單位對應的詳細資訊
+                const unitInfo = currentProductDetails.units_info.find(info => info.unit === selectedUnit);
+                if (unitInfo) {
+                    console.log(`更新單位 ${selectedUnit} 的價格與庫存: 單價=${unitInfo.unit_price}, 庫存=${unitInfo.quantity}`);
+                    
+                    // 更新單價和庫存量
+                    document.getElementById('unit_price').value = unitInfo.unit_price;
+                    document.getElementById('available_quantity').value = unitInfo.quantity;
+                    
+                    // 重新計算總價
+                    calculateTotal();
+                    
+                    // 如果庫存量很低，顯示警告
+                    if (unitInfo.quantity <= 5) {
+                        alert(`警告！該產品庫存僅剩 ${unitInfo.quantity} ${selectedUnit}！`);
+                    }
+                } else {
+                    console.error(`找不到單位 ${selectedUnit} 的詳細資訊`);
+                }
+            } else {
+                console.error('沒有可用的產品詳情或單位資訊');
+            }
+        }
+        
+        // 單位選擇變更時更新對應的單價和庫存
+        document.getElementById('unit').addEventListener('change', function() {
+            const selectedUnit = this.value;
+            if (selectedUnit) {
+                updatePriceAndQuantity(selectedUnit);
+            }
+        });
+        
+        // 監聽表單提交
+        document.getElementById('saleForm').addEventListener('submit', function(e) {
+            // 檢查所有必填欄位
+            const unitSelect = document.getElementById('unit');
+            if (!unitSelect.value) {
+                e.preventDefault();
+                alert('請選擇單位');
+                unitSelect.focus();
+                return false;
+            }
+            
+            console.log('表單提交中，單位值為:', unitSelect.value);
+        });
+    </script>
+</body>
+</html>

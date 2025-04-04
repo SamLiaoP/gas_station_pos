@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>產生報表 - 加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .result-message {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #d4edda;
+            border-radius: 4px;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: none;
+        }
+        
+        .download-links {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .download-button {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .download-button:hover {
+            background-color: #0069d9;
+        }
+        
+        .home-button {
+            background-color: #28a745;
+        }
+        
+        .home-button:hover {
+            background-color: #218838;
+        }
+
+        .report-options {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+
+        .date-range-container {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .date-inputs {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>產生報表</h1>
+        <form id="reportForm" method="POST" action="{{ url_for('main_routes.generate_reports_route') }}">
+            <!-- 報表類型選項 -->
+            <div class="report-options">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="report_type">報表類型:</label>
+                        <select id="report_type" name="report_type" required>
+                            <option value="monthly">月度報表</option>
+                            <option value="custom">自定義日期報表</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 月度報表選項 -->
+                <div id="monthly_options">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="year">年份:</label>
+                            <select id="year" name="year" required>
+                                {% for year in years %}
+                                <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="month">月份:</label>
+                            <select id="month" name="month" required>
+                                {% for month in months %}
+                                <option value="{{ month }}" {% if month == current_month %}selected{% endif %}>{{ month }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自定義日期選項 -->
+                <div id="custom_options" class="date-range-container">
+                    <div class="date-inputs">
+                        <div class="form-group">
+                            <label for="start_date">開始日期:</label>
+                            <input type="date" id="start_date" name="start_date">
+                        </div>
+                        <div class="form-group">
+                            <label for="end_date">結束日期:</label>
+                            <input type="date" id="end_date" name="end_date">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 報表內容選項 -->
+                <div class="checkbox-container">
+                    <input type="checkbox" id="generate_farmer_details" name="generate_farmer_details" checked>
+                    <label for="generate_farmer_details">產生小農明細報表</label>
+                </div>
+            </div>
+            
+            <div class="buttons-container">
+                <button type="submit" class="submit-button" id="generateButton">產生報表</button>
+                <button type="button" class="back-button" onclick="location.href='{{ url_for('main_routes.select_operation') }}'">返回功能選單</button>
+                <button type="button" class="home-button" onclick="location.href='{{ url_for('main_routes.index') }}'">返回首頁</button>
+            </div>
+        </form>
+        
+        <div id="resultMessage" class="result-message">
+            <h3>報表已生成成功！</h3>
+            <p id="reportInfo"></p>
+            <div class="download-links" id="downloadLinks">
+                <!-- 下載連結將通過JavaScript動態生成 -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 切換報表類型函數
+        document.getElementById('report_type').addEventListener('change', function() {
+            const reportType = this.value;
+            const monthlyOptions = document.getElementById('monthly_options');
+            const customOptions = document.getElementById('custom_options');
+            
+            if (reportType === 'monthly') {
+                monthlyOptions.style.display = 'block';
+                customOptions.style.display = 'none';
+                
+                // 重置自定義日期欄位與驗證
+                document.getElementById('start_date').required = false;
+                document.getElementById('end_date').required = false;
+                document.getElementById('year').required = true;
+                document.getElementById('month').required = true;
+            } else {
+                monthlyOptions.style.display = 'none';
+                customOptions.style.display = 'block';
+                
+                // 設置自定義日期欄位與驗證
+                document.getElementById('start_date').required = true;
+                document.getElementById('end_date').required = true;
+                document.getElementById('year').required = false;
+                document.getElementById('month').required = false;
+                
+                // 預設為本月第一天和最後一天
+                const today = new Date();
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                
+                document.getElementById('start_date').value = firstDay.toISOString().split('T')[0];
+                document.getElementById('end_date').value = lastDay.toISOString().split('T')[0];
+            }
+        });
+        
+        // 頁面載入時自動設定當前日期
+        document.addEventListener('DOMContentLoaded', function() {
+            // 預設顯示月度報表選項
+            document.getElementById('report_type').dispatchEvent(new Event('change'));
+        });
+
+        // 表單提交處理
+        document.getElementById('reportForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // 設置按鈕為載入狀態
+            const generateButton = document.getElementById('generateButton');
+            generateButton.disabled = true;
+            generateButton.innerText = '報表生成中...';
+            
+            // 提取表單數據
+            const formData = new FormData(this);
+            
+            // 發送AJAX請求
+            fetch('{{ url_for("main_routes.generate_reports_route") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('報表生成失敗');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // 重置按鈕狀態
+                generateButton.disabled = false;
+                generateButton.innerText = '產生報表';
+                
+                // 顯示成功消息
+                const resultMessage = document.getElementById('resultMessage');
+                const reportInfo = document.getElementById('reportInfo');
+                const downloadLinks = document.getElementById('downloadLinks');
+                
+                // 設置報表信息
+                reportInfo.innerText = data.message || '報表生成成功';
+                
+                // 清空舊的下載連結
+                downloadLinks.innerHTML = '';
+                
+                // 添加新的下載連結
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(file => {
+                        const link = document.createElement('a');
+                        link.href = file.url;
+                        link.className = 'download-button';
+                        link.innerText = `下載 ${file.name}`;
+                        link.download = file.name;
+                        downloadLinks.appendChild(link);
+                    });
+                }
+                
+                // 顯示結果區域
+                resultMessage.style.display = 'block';
+                
+                // 捲動到結果區域
+                resultMessage.scrollIntoView({ behavior: 'smooth' });
+            })
+            .catch(error => {
+                // 重置按鈕狀態
+                generateButton.disabled = false;
+                generateButton.innerText = '產生報表';
+                
+                // 顯示錯誤消息
+                alert('報表生成失敗：' + error.message);
+            });
+        });
+    </script>
+</body>
+</html>

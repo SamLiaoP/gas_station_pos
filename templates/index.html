@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>加油站小農POS系統</h1>
+        <div class="date-shift-container">
+            <div class="input-group">
+                <label for="date">日期:</label>
+                <input type="date" id="date" name="date" value="{{ today }}">
+            </div>
+            <div class="input-group">
+                <label for="shift">班別:</label>
+                <select id="shift" name="shift">
+                    <option value="早班" {% if current_shift == '早班' %}selected{% endif %}>早班</option>
+                    <option value="午班" {% if current_shift == '午班' %}selected{% endif %}>午班</option>
+                    <option value="晚班" {% if current_shift == '晚班' %}selected{% endif %}>晚班</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="location.href='{{ url_for('main_routes.select_operation') }}'">確認並繼續</button>
+    </div>
+    <script>
+        // 頁面載入時自動設定當前日期
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            document.getElementById('date').value = formattedDate;
+        });
+    </script>
+</body>
+</html>

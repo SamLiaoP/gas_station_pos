@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>選擇操作 - 加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>請選擇操作</h1>
+        <div class="buttons-container">
+            <button class="big-button" onclick="location.href='{{ url_for('main_routes.purchase') }}'">進貨登記</button>
+            <button class="big-button" onclick="location.href='{{ url_for('main_routes.sale') }}'">銷售登記</button>
+            <button class="big-button" onclick="location.href='{{ url_for('main_routes.inventory') }}'">查看庫存</button>
+            <button class="big-button" onclick="location.href='{{ url_for('main_routes.generate_reports_route') }}'">產生月報表</button>
+        </div>
+        <button class="back-button" onclick="location.href='{{ url_for('main_routes.index') }}'">返回首頁</button>
+    </div>
+</body>
+</html>

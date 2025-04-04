@@ -1,0 +1,208 @@
+/* 基本樣式 */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
+
+.error {
+    border-color: red;
+    background-color: #ffeeee;
+}
+
+body {
+    background-color: #f5f5f5;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333;
+}
+
+h2 {
+    color: #444;
+    margin-bottom: 15px;
+}
+
+/* 表單樣式 */
+.form-row {
+    margin-bottom: 15px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+
+input, select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+/* 按鈕樣式 */
+button {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+.back-button {
+    background-color: #777;
+}
+
+.back-button:hover {
+    background-color: #666;
+}
+
+.submit-button {
+    background-color: #4CAF50;
+}
+
+.submit-button:hover {
+    background-color: #45a049;
+}
+
+.view-button {
+    background-color: #2196F3;
+}
+
+.view-button:hover {
+    background-color: #0b7dda;
+}
+
+.big-button {
+    width: 45%;
+    margin: 10px;
+    padding: 20px;
+    font-size: 18px;
+}
+
+.buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    margin-top: 20px;
+}
+
+.form-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.refresh-button {
+    background-color: #2196F3;
+}
+
+.refresh-button:hover {
+    background-color: #0b7dda;
+}
+
+/* 日期和班別容器 */
+.date-shift-container {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+}
+
+.date-shift-container .input-group {
+    width: 48%;
+}
+
+/* 表格樣式 */
+.table-container {
+    overflow-x: auto;
+    margin-bottom: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f8f8f8;
+    font-weight: bold;
+}
+
+tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* 彈性容器 */
+.flex-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.form-container {
+    width: 60%;
+}
+
+.inventory-container {
+    width: 35%;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+/* 響應式設計 */
+@media screen and (max-width: 768px) {
+    .date-shift-container {
+        flex-direction: column;
+    }
+    
+    .date-shift-container .input-group {
+        width: 100%;
+        margin-bottom: 15px;
+    }
+    
+    .big-button {
+        width: 100%;
+        margin: 5px 0;
+    }
+    
+    .form-container, .inventory-container {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+}

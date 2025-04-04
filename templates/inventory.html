@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>庫存查詢 - 加油站小農POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .low-stock {
+            background-color: #ffdddd;
+            color: #cc0000;
+            font-weight: bold;
+        }
+        .warning-stock {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .search-container {
+            margin-bottom: 20px;
+        }
+        .filter-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .filter-select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        #searchInput {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            width: 100%;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>庫存查詢</h1>
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋產品...">
+        </div>
+        <div class="filter-container">
+            <select id="farmerFilter" class="filter-select">
+                <option value="">所有供應商</option>
+                {% set farmers = [] %}
+                {% for item in inventory %}
+                    {% if item["供應商"] not in farmers %}
+                        {% set _ = farmers.append(item["供應商"]) %}
+                        <option value="{{ item["供應商"] }}">{{ item["供應商"] }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <select id="stockFilter" class="filter-select">
+                <option value="all">所有庫存</option>
+                <option value="low">低庫存 (<=5)</option>
+                <option value="warning">警告庫存 (<=10)</option>
+                <option value="normal">正常庫存 (>10)</option>
+            </select>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>產品編號</th>
+                        <th>產品名稱</th>
+                        <th>單位</th>
+                        <th>庫存數量</th>
+                        <th>單價</th>
+                        <th>供應商</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTable">
+                    {% for item in inventory %}
+                    <tr class="inventory-row {% if item["數量"] <= 5 %}low-stock{% elif item["數量"] <= 10 %}warning-stock{% endif %}" 
+                        data-name="{{ item["產品名稱"] }}" 
+                        data-farmer="{{ item["供應商"] }}" 
+                        data-stock="{{ item["數量"] }}">
+                        <td>{{ item["產品編號"] }}</td>
+                        <td>{{ item["產品名稱"] }}</td>
+                        <td>{{ item["單位"] }}</td>
+                        <td>{{ item["數量"] }}</td>
+                        <td>{{ item["單價"] }}</td>
+                        <td>{{ item["供應商"] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="buttons-container">
+            <button class="back-button" onclick="location.href='{{ url_for('main_routes.select_operation') }}'">返回</button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const farmerFilter = document.getElementById('farmerFilter');
+            const stockFilter = document.getElementById('stockFilter');
+            const rows = document.querySelectorAll('.inventory-row');
+            
+            function filterTable() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const farmerValue = farmerFilter.value;
+                const stockValue = stockFilter.value;
+                
+                rows.forEach(row => {
+                    const name = row.getAttribute('data-name').toLowerCase();
+                    const farmer = row.getAttribute('data-farmer');
+                    const stock = parseInt(row.getAttribute('data-stock'));
+                    
+                    let showRow = name.includes(searchTerm);
+                    
+                    if (showRow && farmerValue !== '') {
+                        showRow = farmer === farmerValue;
+                    }
+                    
+                    if (showRow) {
+                        switch (stockValue) {
+                            case 'low':
+                                showRow = stock <= 5;
+                                break;
+                            case 'warning':
+                                showRow = stock <= 10;
+                                break;
+                            case 'normal':
+                                showRow = stock > 10;
+                                break;
+                        }
+                    }
+                    
+                    row.style.display = showRow ? '' : 'none';
+                });
+            }
+            
+            searchInput.addEventListener('input', filterTable);
+            farmerFilter.addEventListener('change', filterTable);
+            stockFilter.addEventListener('change', filterTable);
+        });
+    </script>
+</body>
+</html>
