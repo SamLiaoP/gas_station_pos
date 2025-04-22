@@ -18,11 +18,11 @@
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label for="farmer">廠商:</label>
-                    <select id="farmer" name="farmer" required>
+                    <label for="supplier">廠商:</label>
+                    <select id="supplier" name="supplier" required>
                         <option value="">請選擇廠商</option>
-                        {% for farmer in farmers %}
-                        <option value="{{ farmer }}">{{ farmer }}</option>
+                        {% for supplier in suppliers %}
+                        <option value="{{ supplier }}">{{ supplier }}</option>
                         {% endfor %}
                     </select>
                 </div>

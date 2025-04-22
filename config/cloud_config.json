@@ -1,0 +1,14 @@
+{
+    "use_cloud": false,
+    "credentials_path": "config/credentials.json",
+    "token_path": "config/token.pickle",
+    "root_folder_name": "GAS_STATION_POS",
+    "data_folder_name": "data",
+    "reports_folder_name": "reports",
+    "cache_enabled": true,
+    "cache_max_age": 300,
+    "sync_check_interval": 60,
+    "conflict_resolution_strategy": "cloud_wins",
+    "retry_attempts": 3,
+    "retry_delay": 5
+}

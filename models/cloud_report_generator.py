@@ -1,11 +1,36 @@
+"""
+雲端報表生成器模組 for GAS_STATION_POS_v2
+整合 Google Drive 雲端儲存功能的報表生成器
+"""
 import os
 import pandas as pd
 from datetime import datetime
 from utils.common import REPORTS_PATH, logger
-from models.data_manager import read_master_data, read_transactions, read_inventory
+from utils.cloud.google_drive_connector import GoogleDriveConnector
+from utils.cloud.cloud_config_manager import CloudConfigManager
+from models.cloud_data_manager import read_master_data, read_transactions, read_inventory
+
+# 雲端配置管理器
+cloud_config = CloudConfigManager()
+drive_connector = GoogleDriveConnector(
+    credentials_path=cloud_config.get("credentials_path"),
+    token_path=cloud_config.get("token_path")
+)
 
 # 生成基本報表（銷售額、廠商分潤、員工分潤）
 def generate_basic_reports(year=None, month=None, start_date=None, end_date=None):
+    """
+    生成基本報表並保存到雲端或本地
+    
+    參數:
+        year (int, optional): 年份
+        month (int, optional): 月份
+        start_date (str, optional): 開始日期
+        end_date (str, optional): 結束日期
+    
+    返回:
+        tuple: (是否成功, 報表目錄, 報表文件列表)
+    """
     try:
         # 決定報表目錄名稱和日期範圍描述
         if start_date and end_date:
@@ -15,10 +40,13 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
             date_range_str = f"{year}年{month:02d}月"
             report_dir_name = f"{year}年{month:02d}月"
         
-        # 準備報表目錄
-        report_dir = os.path.join(REPORTS_PATH, report_dir_name)
-        if not os.path.exists(report_dir):
-            os.makedirs(report_dir, exist_ok=True)
+        # 準備本地報表目錄
+        local_report_dir = os.path.join(REPORTS_PATH, report_dir_name)
+        if not os.path.exists(local_report_dir):
+            os.makedirs(local_report_dir, exist_ok=True)
+        
+        # 雲端報表路徑
+        cloud_report_dir = f"reports/{report_dir_name}"
         
         # 讀取交易記錄
         sales_df = read_transactions('銷售', start_date, end_date)
@@ -97,20 +125,70 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
             '金額': [total_sales, total_purchases, total_returns, staff_commission, farmer_commission, net_profit]
         })
         
-        # 保存報表
-        farmer_report.to_excel(os.path.join(report_dir, '廠商月報.xlsx'), index=False)
-        staff_report.to_excel(os.path.join(report_dir, '員工月報.xlsx'), index=False)
-        financial_report.to_excel(os.path.join(report_dir, '收支表月報.xlsx'), index=False)
+        # 報表檔案名稱和路徑
+        farmer_report_name = '廠商月報.xlsx'
+        staff_report_name = '員工月報.xlsx'
+        financial_report_name = '收支表月報.xlsx'
+        
+        # 本地報表路徑
+        local_farmer_report_path = os.path.join(local_report_dir, farmer_report_name)
+        local_staff_report_path = os.path.join(local_report_dir, staff_report_name)
+        local_financial_report_path = os.path.join(local_report_dir, financial_report_name)
+        
+        # 保存報表到本地
+        farmer_report.to_excel(local_farmer_report_path, index=False)
+        staff_report.to_excel(local_staff_report_path, index=False)
+        financial_report.to_excel(local_financial_report_path, index=False)
+        
+        # 如果啟用雲端模式，也保存到雲端
+        share_links = {}
+        if cloud_config.is_cloud_mode():
+            # 確保雲端報表目錄存在
+            drive_connector.ensure_directory(cloud_report_dir)
+            
+            # 上傳報表到雲端
+            cloud_farmer_report_path = f"{cloud_report_dir}/{farmer_report_name}"
+            cloud_staff_report_path = f"{cloud_report_dir}/{staff_report_name}"
+            cloud_financial_report_path = f"{cloud_report_dir}/{financial_report_name}"
+            
+            # 上傳並創建分享連結
+            farmer_file_id = drive_connector.upload_file(local_farmer_report_path, cloud_report_dir, farmer_report_name)
+            staff_file_id = drive_connector.upload_file(local_staff_report_path, cloud_report_dir, staff_report_name)
+            financial_file_id = drive_connector.upload_file(local_financial_report_path, cloud_report_dir, financial_report_name)
+            
+            if farmer_file_id:
+                share_links[farmer_report_name] = drive_connector.create_share_link(farmer_file_id)
+            
+            if staff_file_id:
+                share_links[staff_report_name] = drive_connector.create_share_link(staff_file_id)
+            
+            if financial_file_id:
+                share_links[financial_report_name] = drive_connector.create_share_link(financial_file_id)
         
         # 返回報表路徑和報表文件列表
         report_files = [
-            {'name': '廠商月報.xlsx', 'path': os.path.join(report_dir, '廠商月報.xlsx')},
-            {'name': '員工月報.xlsx', 'path': os.path.join(report_dir, '員工月報.xlsx')},
-            {'name': '收支表月報.xlsx', 'path': os.path.join(report_dir, '收支表月報.xlsx')}
+            {
+                'name': farmer_report_name, 
+                'path': local_farmer_report_path,
+                'share_link': share_links.get(farmer_report_name)
+            },
+            {
+                'name': staff_report_name, 
+                'path': local_staff_report_path,
+                'share_link': share_links.get(staff_report_name)
+            },
+            {
+                'name': financial_report_name, 
+                'path': local_financial_report_path,
+                'share_link': share_links.get(financial_report_name)
+            }
         ]
         
-        logger.info(f"基本報表生成成功，保存在: {report_dir}")
-        return True, report_dir, report_files
+        logger.info(f"基本報表生成成功，保存在: {local_report_dir}")
+        if cloud_config.is_cloud_mode():
+            logger.info(f"報表已同步到雲端: {cloud_report_dir}")
+        
+        return True, local_report_dir, report_files
     except Exception as e:
         logger.error(f"生成基本報表時出錯: {str(e)}")
         import traceback
@@ -119,6 +197,18 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
 
 # 生成廠商詳細報表
 def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end_date=None):
+    """
+    生成廠商詳細報表並保存到雲端或本地
+    
+    參數:
+        year (int, optional): 年份
+        month (int, optional): 月份
+        start_date (str, optional): 開始日期
+        end_date (str, optional): 結束日期
+    
+    返回:
+        tuple: (是否成功, 報表目錄, 報表文件列表)
+    """
     try:
         # 決定報表目錄名稱和日期範圍描述
         if start_date and end_date:
@@ -128,10 +218,13 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
             date_range_str = f"{year}年{month:02d}月"
             report_dir_name = f"{year}年{month:02d}月"
         
-        # 準備報表目錄
-        report_dir = os.path.join(REPORTS_PATH, report_dir_name, '廠商詳細報表')
-        if not os.path.exists(report_dir):
-            os.makedirs(report_dir, exist_ok=True)
+        # 準備本地報表目錄
+        local_report_dir = os.path.join(REPORTS_PATH, report_dir_name, '廠商詳細報表')
+        if not os.path.exists(local_report_dir):
+            os.makedirs(local_report_dir, exist_ok=True)
+        
+        # 雲端報表路徑
+        cloud_report_dir = f"reports/{report_dir_name}/廠商詳細報表"
         
         # 讀取交易記錄
         sales_df = read_transactions('銷售', start_date, end_date)
@@ -148,6 +241,11 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
         farmers = staff_farmers_df[staff_farmers_df['類型'] == 'farmer']
         
         report_files = []
+        share_links = {}
+        
+        # 確保雲端報表目錄存在（如果啟用了雲端模式）
+        if cloud_config.is_cloud_mode():
+            drive_connector.ensure_directory(cloud_report_dir)
         
         # 為每個廠商生成詳細報表
         for _, farmer in farmers.iterrows():
@@ -173,9 +271,12 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
             current_inventory = inventory_df[inventory_df['供應商'] == farmer_name]
             inventory_value = (current_inventory['數量'] * current_inventory['單價']).sum() if not current_inventory.empty else 0
             
+            # 報表檔案名稱
+            report_name = f"{farmer_name}詳細報表.xlsx"
+            local_report_path = os.path.join(local_report_dir, report_name)
+            
             # 創建 Excel 工作簿
-            report_path = os.path.join(report_dir, f"{farmer_name}詳細報表.xlsx")
-            with pd.ExcelWriter(report_path) as writer:
+            with pd.ExcelWriter(local_report_path) as writer:
                 # 1. 總覽工作表
                 summary_df = pd.DataFrame({
                     '項目': ['廠商名稱', '報表期間', '銷售總額', '進貨總額', '退貨總額', '分潤比例', '分潤金額', '庫存價值'],
@@ -228,14 +329,24 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
                     pd.DataFrame(columns=['產品編號', '產品名稱', '單位', '數量', '單價', '供應商', '庫存價值'])\
                       .to_excel(writer, sheet_name='庫存明細', index=False)
             
+            # 如果啟用雲端模式，將報表上傳到雲端
+            if cloud_config.is_cloud_mode():
+                file_id = drive_connector.upload_file(local_report_path, cloud_report_dir, report_name)
+                if file_id:
+                    share_links[report_name] = drive_connector.create_share_link(file_id)
+            
             # 添加到報表文件列表
             report_files.append({
-                'name': f"{farmer_name}詳細報表.xlsx",
-                'path': report_path
+                'name': report_name,
+                'path': local_report_path,
+                'share_link': share_links.get(report_name)
             })
         
-        logger.info(f"廠商詳細報表生成成功，共 {len(report_files)} 個報表，保存在: {report_dir}")
-        return True, report_dir, report_files
+        logger.info(f"廠商詳細報表生成成功，共 {len(report_files)} 個報表，保存在: {local_report_dir}")
+        if cloud_config.is_cloud_mode():
+            logger.info(f"報表已同步到雲端: {cloud_report_dir}")
+        
+        return True, local_report_dir, report_files
     except Exception as e:
         logger.error(f"生成廠商詳細報表時出錯: {str(e)}")
         import traceback
@@ -244,6 +355,19 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
 
 # 統一報表生成入口
 def generate_reports(year=None, month=None, start_date=None, end_date=None, generate_farmer_details=False):
+    """
+    統一報表生成入口，生成所有報表並保存到雲端或本地
+    
+    參數:
+        year (int, optional): 年份
+        month (int, optional): 月份
+        start_date (str, optional): 開始日期
+        end_date (str, optional): 結束日期
+        generate_farmer_details (bool, optional): 是否生成廠商詳細報表
+    
+    返回:
+        tuple: (是否成功, 報表目錄, 報表文件列表)
+    """
     # 生成基本報表
     basic_success, basic_dir, basic_files = generate_basic_reports(year, month, start_date, end_date)
     

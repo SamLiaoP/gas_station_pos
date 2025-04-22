@@ -59,11 +59,11 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="farmer">廠商:</label>
-                            <select id="farmer" name="farmer" required>
+                            <label for="supplier">廠商:</label>
+                            <select id="supplier" name="supplier" required>
                                 <option value="">請選擇廠商</option>
-                                {% for farmer in farmers %}
-                                <option value="{{ farmer }}">{{ farmer }}</option>
+                                {% for supplier in suppliers %}
+                                <option value="{{ supplier }}">{{ supplier }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -145,9 +145,9 @@
 
     <script>
         // 將廠商產品資料轉換為JavaScript變數
-        const productsByFarmer = {
-            {% for farmer, products in products_by_farmer.items() %}
-                "{{ farmer }}": [
+        const productsBySupplier = {
+            {% for supplier, products in products_by_supplier.items() %}
+                "{{ supplier }}": [
                     {% for product in products %}
                         {
                             name: "{{ product.name }}",
@@ -171,8 +171,8 @@
         });
         
         // 當廠商選擇改變時
-        document.getElementById('farmer').addEventListener('change', function() {
-            const farmer = this.value;
+        document.getElementById('supplier').addEventListener('change', function() {
+            const supplier = this.value;
             const productSelect = document.getElementById('product_name');
             const unitSelect = document.getElementById('unit');
             const productTable = document.getElementById('product-list');
@@ -180,15 +180,15 @@
             // 重置產品選擇和單位選擇
             productSelect.innerHTML = '<option value="">請選擇產品</option>';
             unitSelect.innerHTML = '<option value="">請先選擇產品</option>';
-            productSelect.disabled = farmer === '';
+            productSelect.disabled = supplier === '';
             unitSelect.disabled = true;
             document.getElementById('available_quantity').value = '';
             
             // 更新產品表格
             productTable.innerHTML = '';
             
-            if (farmer && productsByFarmer[farmer]) {
-                const products = productsByFarmer[farmer];
+            if (supplier && productsBySupplier[supplier]) {
+                const products = productsBySupplier[supplier];
                 
                 // 已顯示的產品名稱集合，用於防止重複
                 const productNames = new Set();
@@ -223,7 +223,7 @@
         
         // 當產品選擇改變時
         document.getElementById('product_name').addEventListener('change', function() {
-            const farmer = document.getElementById('farmer').value;
+            const supplier = document.getElementById('supplier').value;
             const productName = this.value;
             const unitSelect = document.getElementById('unit');
             
@@ -232,8 +232,8 @@
             unitSelect.disabled = productName === '';
             document.getElementById('available_quantity').value = '';
             
-            if (farmer && productName && productsByFarmer[farmer]) {
-                const products = productsByFarmer[farmer];
+            if (supplier && productName && productsBySupplier[supplier]) {
+                const products = productsBySupplier[supplier];
                 
                 // 篩選出所選產品的不同單位
                 const units = products.filter(p => p.name === productName);
@@ -289,7 +289,7 @@
             }
             
             // 檢查必填欄位
-            const requiredFields = ['farmer', 'product_name', 'unit', 'quantity', 'staff'];
+            const requiredFields = ['supplier', 'product_name', 'unit', 'quantity', 'staff'];
             let valid = true;
             
             requiredFields.forEach(field => {
