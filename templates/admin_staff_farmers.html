@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>員工與廠商管理 - 加油站POS系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .admin-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .admin-title {
+            margin: 0;
+        }
+        
+        .admin-back {
+            padding: 8px 16px;
+            background-color: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        .admin-table th, .admin-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .admin-table th {
+            background-color: #f2f2f2;
+        }
+        
+        .admin-table input, .admin-table select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .admin-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        
+        .admin-button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .admin-button:hover {
+            background-color: #0069d9;
+        }
+        
+        .admin-button.add {
+            background-color: #28a745;
+        }
+        
+        .admin-button.add:hover {
+            background-color: #218838;
+        }
+        
+        .flash-messages {
+            margin-bottom: 15px;
+        }
+        
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            color: #155724;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1 class="admin-title">員工與廠商管理</h1>
+            <a href="{{ url_for('main_routes.admin_dashboard') }}" class="admin-back">返回管理控制台</a>
+        </div>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for message in messages %}
+                        <div class="flash-message">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST" action="{{ url_for('main_routes.admin_staff_farmers') }}">
+            <table class="admin-table" id="staff-farmers-table">
+                <thead>
+                    <tr>
+                        <th>類型</th>
+                        <th>名稱</th>
+                        <th>分潤比例</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sf in staff_farmers %}
+                    <tr>
+                        <td>
+                            <select name="type" required>
+                                <option value="staff" {% if sf['類型'] == 'staff' %}selected{% endif %}>員工</option>
+                                <option value="farmer" {% if sf['類型'] == 'farmer' %}selected{% endif %}>廠商</option>
+                            </select>
+                        </td>
+                        <td><input type="text" name="name" value="{{ sf['名稱'] }}" required></td>
+                        <td><input type="number" name="commission_rate" value="{{ sf['分潤比例'] }}" min="0" max="1" step="0.01" required></td>
+                        <td><button type="button" onclick="removeRow(this)" class="admin-button" style="background-color: #dc3545;">刪除</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div class="admin-actions">
+                <button type="button" onclick="addRow()" class="admin-button add">新增人員</button>
+                <button type="submit" class="admin-button">保存變更</button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        function addRow() {
+            const table = document.getElementById('staff-farmers-table').getElementsByTagName('tbody')[0];
+            const newRow = table.insertRow();
+            
+            const cell1 = newRow.insertCell(0);
+            const cell2 = newRow.insertCell(1);
+            const cell3 = newRow.insertCell(2);
+            const cell4 = newRow.insertCell(3);
+            
+            cell1.innerHTML = `
+                <select name="type" required>
+                    <option value="staff">員工</option>
+                    <option value="farmer">廠商</option>
+                </select>
+            `;
+            cell2.innerHTML = '<input type="text" name="name" required>';
+            cell3.innerHTML = '<input type="number" name="commission_rate" value="0.5" min="0" max="1" step="0.01" required>';
+            cell4.innerHTML = '<button type="button" onclick="removeRow(this)" class="admin-button" style="background-color: #dc3545;">刪除</button>';
+        }
+        
+        function removeRow(button) {
+            const row = button.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+        }
+    </script>
+</body>
+</html> 

@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>進貨登記 - 加油站POS系統</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -19,12 +24,20 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="supplier">廠商:</label>
-                    <select id="supplier" name="supplier" required>
+                    <select id="supplier" name="supplier" onchange="checkNewSupplier()" required>
                         <option value="">請選擇廠商</option>
                         {% for supplier in suppliers %}
                         <option value="{{ supplier }}">{{ supplier }}</option>
                         {% endfor %}
+                        <option value="新增廠商">+ 新增廠商</option>
                     </select>
+                </div>
+            </div>
+            <div class="form-row hidden" id="new_supplier_row">
+                <div class="form-group">
+                    <label for="new_supplier">新廠商名稱:</label>
+                    <input type="text" id="new_supplier" name="new_supplier">
+                    <input type="hidden" id="is_new_supplier" name="is_new_supplier" value="false">
                 </div>
             </div>
             <div class="form-row">
@@ -94,6 +107,24 @@
             const quantity = parseFloat(document.getElementById('quantity').value) || 0;
             const unitPrice = parseFloat(document.getElementById('unit_price').value) || 0;
             document.getElementById('total_price').value = (quantity * unitPrice).toFixed(2);
+        }
+
+        // 檢查是否選擇新增廠商
+        function checkNewSupplier() {
+            const supplierSelect = document.getElementById('supplier');
+            const newSupplierRow = document.getElementById('new_supplier_row');
+            const newSupplierInput = document.getElementById('new_supplier');
+            const isNewSupplierFlag = document.getElementById('is_new_supplier');
+            
+            if (supplierSelect.value === '新增廠商') {
+                newSupplierRow.classList.remove('hidden');
+                newSupplierInput.required = true;
+                isNewSupplierFlag.value = 'true';
+            } else {
+                newSupplierRow.classList.add('hidden');
+                newSupplierInput.required = false;
+                isNewSupplierFlag.value = 'false';
+            }
         }
 
         // 監聽表單提交

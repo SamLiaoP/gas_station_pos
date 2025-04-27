@@ -4,10 +4,14 @@ from routes.main_routes import main_routes
 from models.data_manager import ensure_master_data, ensure_inventory_data, ensure_transactions_data
 from database import db_manager
 import os
+import secrets
 
 # 創建並配置應用
 def create_app():
     app = Flask(__name__)
+    
+    # 設定 secret_key 用於 session
+    app.secret_key = secrets.token_hex(16)
     
     # 確保所有必要目錄存在
     ensure_directories()
@@ -35,25 +39,16 @@ def create_app():
     logger.info(f"應用初始化完成，運行於本地模式")
     return app
 
-# 從Excel檔案匯入資料(如果需要)
+# 從舊Excel檔案匯入資料(如果需要)
 def import_data_if_needed():
-    # 檢查資料庫是否已有資料
-    result = db_manager.execute_query("SELECT COUNT(*) FROM transactions")
+    logger.info("初始化數據...")
     
-    # 如果資料庫是空的，且Excel檔案存在，才進行匯入
-    if result and result[0][0] == 0:
-        excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'transactions.xlsx')
-        if os.path.exists(excel_path):
-            logger.info("檢測到舊的Excel資料，開始匯入到SQLite...")
-            db_manager.import_from_excel()
-        else:
-            logger.info("沒有找到舊的Excel資料，跳過匯入步驟")
+    # 從Excel匯入資料
+    # db_manager.import_from_excel()
+    
+    logger.info("數據初始化完成")
 
-app = create_app()
-
-# 啟動應用
+# 應用入口點
 if __name__ == '__main__':
-    print("啟動加油站POS系統 v2，請訪問 http://127.0.0.1:8080/")
-    # 如果需要在區域網內裡訪問，請將host設為'0.0.0.0'
-    # 如果只在本機訪問，請使用'127.0.0.1'
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app = create_app()
+    app.run(host='127.0.0.1', port=8081, debug=True)

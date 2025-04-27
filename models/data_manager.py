@@ -246,3 +246,41 @@ def get_staff_and_farmers():
     farmers = staff_farmers_df[staff_farmers_df['類型'] == 'farmer']['名稱'].tolist()
     
     return staff, farmers
+
+# 新增廠商
+def add_new_farmer(farmer_name, commission_rate=0.5):
+    """
+    新增廠商到資料庫
+    
+    參數:
+        farmer_name (str): 廠商名稱
+        commission_rate (float): 分潤比例，預設值為0.5
+        
+    返回:
+        bool: 是否成功新增廠商
+    """
+    try:
+        conn = db_manager.get_connection()
+        cursor = conn.cursor()
+        
+        # 檢查廠商是否已存在
+        cursor.execute("SELECT COUNT(*) FROM staff_farmers WHERE type = 'farmer' AND name = ?", (farmer_name,))
+        if cursor.fetchone()[0] > 0:
+            logger.warning(f"廠商 '{farmer_name}' 已存在")
+            conn.close()
+            return False
+        
+        # 插入新廠商
+        cursor.execute(
+            "INSERT INTO staff_farmers (type, name, commission_rate) VALUES (?, ?, ?)",
+            ('farmer', farmer_name, commission_rate)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"已新增廠商: {farmer_name}, 分潤比例: {commission_rate}")
+        return True
+    except Exception as e:
+        logger.error(f"新增廠商時出錯: {str(e)}")
+        return False
