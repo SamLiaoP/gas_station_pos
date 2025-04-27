@@ -1,164 +1,114 @@
 import os
 import pandas as pd
 from utils.common import DATA_PATH, logger
+from database import db_manager
 
-# 檢查Excel文件是否存在，並創建新文件
-def ensure_excel_file(file_path, sheet_name=None, columns=None):
-    if os.path.exists(file_path):
+# 確保主數據存在
+def ensure_master_data():
+    """確保主數據（系統配置、員工廠商）存在"""
+    # 檢查系統配置表中是否有資料
+    result = db_manager.execute_query("SELECT COUNT(*) FROM system_config")
+    if result and result[0][0] > 0:
         return True
     
-    # 如果文件不存在，創建新的空白文件
-    if sheet_name and columns:
-        # 創建多sheet Excel文件
-        with pd.ExcelWriter(file_path) as writer:
-            df = pd.DataFrame(columns=columns)
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-    elif columns:
-        # 創建單一sheet Excel文件
-        df = pd.DataFrame(columns=columns)
-        df.to_excel(file_path, index=False)
-    else:
-        # 沒有指定列名，創建一個最基本的空白Excel
-        pd.DataFrame().to_excel(file_path, index=False)
-    
-    logger.info(f"已創建新的Excel文件: {file_path}")
+    # 如果沒有資料，載入預設資料
+    db_manager.load_default_data()
     return True
 
-# 確保主數據文件存在，如果不存在則創建初始數據
-def ensure_master_data():
-    # 主數據文件路徑
-    master_data_path = os.path.join(DATA_PATH, 'master_data.xlsx')
-    
-    # 如果文件已存在，直接返回
-    if os.path.exists(master_data_path):
-        return True
-    
-    # 如果不存在，創建初始數據
-    try:
-        # 創建系統配置表
-        config_df = pd.DataFrame({
-            '鍵': ['morning_shift_start', 'morning_shift_end', 'afternoon_shift_start', 'afternoon_shift_end', 'night_shift_start', 'night_shift_end'],
-            '值': ['06:00', '14:00', '14:00', '22:00', '22:00', '06:00']
-        })
-        
-        # 創建員工廠商表
-        staff_farmers_df = pd.DataFrame({
-            '類型': ['staff', 'staff', 'staff', 'farmer', 'farmer', 'farmer'],
-            '名稱': ['王小明', '李小華', '張大力', '有機農場', '綠色蔬果', '友善耕作'],
-            '分潤比例': [0.05, 0.05, 0.05, 0.15, 0.12, 0.10]
-        })
-        
-        # 創建一個Excel文件，包含多個工作表
-        with pd.ExcelWriter(master_data_path) as writer:
-            config_df.to_excel(writer, sheet_name='系統配置', index=False)
-            staff_farmers_df.to_excel(writer, sheet_name='員工廠商', index=False)
-        
-        logger.info(f"已創建主數據文件: {master_data_path}")
-        return True
-    except Exception as e:
-        logger.error(f"創建主數據時出錯: {str(e)}")
-        return False
-
-# 確保庫存文件存在，如果不存在則創建初始數據
+# 確保庫存資料存在
 def ensure_inventory_data():
-    # 庫存文件路徑
-    inventory_path = os.path.join(DATA_PATH, 'inventory.xlsx')
-    
-    # 如果文件已存在，直接返回
-    if os.path.exists(inventory_path):
+    """確保庫存資料存在"""
+    # 檢查庫存表中是否有資料
+    result = db_manager.execute_query("SELECT COUNT(*) FROM inventory")
+    if result and result[0][0] > 0:
         return True
     
-    # 如果不存在，創建初始數據
-    try:
-        # 創建庫存表
-        inventory_df = pd.DataFrame({
-            '產品編號': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            '產品名稱': ['有機小白菜', '有機青菜', '有機紅蘿蔔', '有機紅蘿蔔', '有機番茄', '有機番茄', '有機馬鈴薯', '新鮮蘋果', '新鮮蘋果', '新鮮蘋果'],
-            '單位': ['把', '把', '公斤', '條', '公斤', '顆', '公斤', '顆', '箱', '公斤'],
-            '數量': [20, 15, 30, 40, 25, 50, 40, 50, 5, 10],
-            '單價': [35, 30, 60, 20, 70, 15, 45, 20, 400, 80],
-            '供應商': ['有機農場', '有機農場', '綠色蔬果', '綠色蔬果', '綠色蔬果', '綠色蔬果', '友善耕作', '有機農場', '有機農場', '有機農場']
-        })
-        
-        # 保存到文件
-        inventory_df.to_excel(inventory_path, index=False)
-        
-        logger.info(f"已創建庫存文件: {inventory_path}")
-        return True
-    except Exception as e:
-        logger.error(f"創建庫存數據時出錯: {str(e)}")
-        return False
+    # 如果沒有資料，載入預設資料
+    db_manager.load_default_data()
+    return True
 
-# 確保交易記錄文件存在
+# 確保交易記錄資料表存在
 def ensure_transactions_data():
-    # 交易記錄文件路徑
-    transactions_path = os.path.join(DATA_PATH, 'transactions.xlsx')
-    
-    # 如果文件已存在，直接返回
-    if os.path.exists(transactions_path):
+    """確保交易記錄資料表存在"""
+    # 檢查交易記錄表是否存在
+    result = db_manager.execute_query("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'")
+    if result:
         return True
     
-    # 如果不存在，創建空文件
-    try:
-        # 設置標準列名
-        transaction_columns = [
-            '交易ID', '交易類型', '日期', '時間', '員工', '班別',
-            '產品編號', '產品名稱', '單位', '數量', '單價', '總價', 
-            '供應商', '退貨原因'
-        ]
-        
-        # 創建空的交易記錄
-        transactions_df = pd.DataFrame(columns=transaction_columns)
-        transactions_df.to_excel(transactions_path, index=False)
-        
-        logger.info(f"已創建交易記錄文件: {transactions_path}")
-        return True
-    except Exception as e:
-        logger.error(f"創建交易記錄數據時出錯: {str(e)}")
-        return False
+    # 如果表不存在，重新初始化資料庫
+    db_manager.init_db()
+    return True
 
-# 讀取主數據文件中的指定sheet
+# 讀取主數據中的指定資料
 def read_master_data(sheet_name):
-    master_data_path = os.path.join(DATA_PATH, 'master_data.xlsx')
-    ensure_master_data()  # 確保文件存在
+    """讀取主數據（系統配置或員工廠商）"""
+    ensure_master_data()  # 確保資料存在
     
     try:
-        return pd.read_excel(master_data_path, sheet_name=sheet_name)
+        if sheet_name == '系統配置':
+            # 讀取系統配置
+            df = db_manager.query_to_dataframe("SELECT key AS 鍵, value AS 值 FROM system_config")
+        elif sheet_name == '員工廠商':
+            # 讀取員工廠商
+            df = db_manager.query_to_dataframe("SELECT type AS 類型, name AS 名稱, commission_rate AS 分潤比例 FROM staff_farmers")
+        else:
+            logger.error(f"無效的主數據表名: {sheet_name}")
+            return pd.DataFrame()
+        
+        return df
     except Exception as e:
         logger.error(f"讀取主數據 {sheet_name} 時出錯: {str(e)}")
         return pd.DataFrame()
 
-# 讀取庫存數據
+# 讀取庫存資料
 def read_inventory():
-    inventory_path = os.path.join(DATA_PATH, 'inventory.xlsx')
-    ensure_inventory_data()  # 確保文件存在
+    """讀取庫存資料"""
+    ensure_inventory_data()  # 確保資料存在
     
     try:
-        return pd.read_excel(inventory_path)
+        df = db_manager.query_to_dataframe("""
+            SELECT product_id AS 產品編號, product_name AS 產品名稱, unit AS 單位, 
+                   quantity AS 數量, unit_price AS 單價, supplier AS 供應商
+            FROM inventory
+        """)
+        return df
     except Exception as e:
-        logger.error(f"讀取庫存數據時出錯: {str(e)}")
+        logger.error(f"讀取庫存資料時出錯: {str(e)}")
         return pd.DataFrame()
 
 # 讀取交易記錄
 def read_transactions(transaction_type=None, start_date=None, end_date=None):
-    transactions_path = os.path.join(DATA_PATH, 'transactions.xlsx')
-    ensure_transactions_data()  # 確保文件存在
+    """讀取交易記錄，可根據交易類型和日期範圍進行篩選"""
+    ensure_transactions_data()  # 確保資料存在
     
     try:
-        df = pd.read_excel(transactions_path)
+        query = """
+            SELECT transaction_id AS 交易ID, transaction_type AS 交易類型, date AS 日期, time AS 時間,
+                   staff AS 員工, shift AS 班別, product_id AS 產品編號, product_name AS 產品名稱,
+                   unit AS 單位, quantity AS 數量, unit_price AS 單價, total_price AS 總價,
+                   supplier AS 供應商, return_reason AS 退貨原因
+            FROM transactions
+            WHERE 1=1
+        """
+        params = []
         
         # 根據交易類型過濾
         if transaction_type:
-            df = df[df['交易類型'] == transaction_type]
+            query += " AND transaction_type = ?"
+            params.append(transaction_type)
         
         # 根據日期範圍過濾
         if start_date and end_date:
-            df = df[(df['日期'] >= start_date) & (df['日期'] <= end_date)]
+            query += " AND date BETWEEN ? AND ?"
+            params.extend([start_date, end_date])
         elif start_date:
-            df = df[df['日期'] >= start_date]
+            query += " AND date >= ?"
+            params.append(start_date)
         elif end_date:
-            df = df[df['日期'] <= end_date]
+            query += " AND date <= ?"
+            params.append(end_date)
         
+        df = db_manager.query_to_dataframe(query, tuple(params))
         return df
     except Exception as e:
         logger.error(f"讀取交易記錄時出錯: {str(e)}")
@@ -166,22 +116,41 @@ def read_transactions(transaction_type=None, start_date=None, end_date=None):
 
 # 保存主數據
 def save_master_data(df, sheet_name):
-    master_data_path = os.path.join(DATA_PATH, 'master_data.xlsx')
-    ensure_master_data()  # 確保文件存在
+    """保存主數據（系統配置或員工廠商）"""
+    ensure_master_data()  # 確保資料存在
     
     try:
-        # 讀取所有工作表數據
-        with pd.ExcelFile(master_data_path) as xls:
-            sheet_names = xls.sheet_names
-            sheet_data = {name: pd.read_excel(master_data_path, sheet_name=name) for name in sheet_names}
+        conn = db_manager.get_connection()
+        cursor = conn.cursor()
         
-        # 更新特定工作表數據
-        sheet_data[sheet_name] = df
+        if sheet_name == '系統配置':
+            # 清空現有資料
+            cursor.execute("DELETE FROM system_config")
+            
+            # 插入新資料
+            for _, row in df.iterrows():
+                cursor.execute(
+                    "INSERT INTO system_config (key, value) VALUES (?, ?)",
+                    (row['鍵'], row['值'])
+                )
+            
+        elif sheet_name == '員工廠商':
+            # 清空現有資料
+            cursor.execute("DELETE FROM staff_farmers")
+            
+            # 插入新資料
+            for _, row in df.iterrows():
+                cursor.execute(
+                    "INSERT INTO staff_farmers (type, name, commission_rate) VALUES (?, ?, ?)",
+                    (row['類型'], row['名稱'], row['分潤比例'])
+                )
+        else:
+            logger.error(f"無效的主數據表名: {sheet_name}")
+            conn.close()
+            return False
         
-        # 保存所有工作表
-        with pd.ExcelWriter(master_data_path) as writer:
-            for name, data in sheet_data.items():
-                data.to_excel(writer, sheet_name=name, index=False)
+        conn.commit()
+        conn.close()
         
         logger.info(f"已更新主數據 {sheet_name}")
         return True
@@ -189,51 +158,88 @@ def save_master_data(df, sheet_name):
         logger.error(f"保存主數據 {sheet_name} 時出錯: {str(e)}")
         return False
 
-# 保存庫存數據
+# 保存庫存資料
 def save_inventory(df):
-    inventory_path = os.path.join(DATA_PATH, 'inventory.xlsx')
-    
+    """保存庫存資料"""
     try:
-        df.to_excel(inventory_path, index=False)
-        logger.info("已更新庫存數據")
+        conn = db_manager.get_connection()
+        cursor = conn.cursor()
+        
+        # 清空現有資料
+        cursor.execute("DELETE FROM inventory")
+        
+        # 插入新資料
+        for _, row in df.iterrows():
+            cursor.execute(
+                """INSERT INTO inventory (product_id, product_name, unit, quantity, unit_price, supplier) 
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    int(row['產品編號']), row['產品名稱'], row['單位'], 
+                    float(row['數量']), float(row['單價']), row['供應商']
+                )
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info("已更新庫存資料")
         return True
     except Exception as e:
-        logger.error(f"保存庫存數據時出錯: {str(e)}")
+        logger.error(f"保存庫存資料時出錯: {str(e)}")
         return False
 
 # 添加交易記錄
 def add_transaction(transaction_data):
-    transactions_path = os.path.join(DATA_PATH, 'transactions.xlsx')
-    ensure_transactions_data()  # 確保文件存在
+    """添加新的交易記錄"""
+    ensure_transactions_data()  # 確保交易記錄表存在
     
     try:
-        # 讀取現有交易記錄
-        df = pd.read_excel(transactions_path)
+        conn = db_manager.get_connection()
+        cursor = conn.cursor()
         
-        # 生成交易ID
-        if df.empty:
-            transaction_id = 1
-        else:
-            transaction_id = df['交易ID'].max() + 1
+        # 獲取最大交易ID
+        cursor.execute("SELECT MAX(transaction_id) FROM transactions")
+        result = cursor.fetchone()
+        max_id = result[0] if result[0] is not None else 0
+        transaction_id = max_id + 1
         
-        # 添加交易ID到數據中
+        # 添加交易ID
         transaction_data['交易ID'] = transaction_id
         
-        # 添加新的交易記錄
-        new_transaction = pd.DataFrame([transaction_data])
-        df = pd.concat([df, new_transaction], ignore_index=True)
+        # 從交易資料中取出欄位數據
+        shift = transaction_data.get('班別', '')
+        return_reason = transaction_data.get('退貨原因', '')
         
-        # 保存更新後的交易記錄
-        df.to_excel(transactions_path, index=False)
+        # 執行插入操作
+        cursor.execute(
+            """INSERT INTO transactions (transaction_id, transaction_type, date, time, staff, shift, 
+               product_id, product_name, unit, quantity, unit_price, total_price, supplier, return_reason) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                transaction_id, transaction_data['交易類型'], 
+                str(transaction_data['日期']), transaction_data['時間'], 
+                transaction_data['員工'], shift,
+                transaction_data['產品編號'], transaction_data['產品名稱'], 
+                transaction_data['單位'], float(transaction_data['數量']), 
+                float(transaction_data['單價']), float(transaction_data['總價']), 
+                transaction_data['供應商'], return_reason
+            )
+        )
+        
+        conn.commit()
+        conn.close()
         
         logger.info(f"已添加交易記錄，ID: {transaction_id}")
         return transaction_id
     except Exception as e:
         logger.error(f"添加交易記錄時出錯: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 # 獲取員工和廠商列表
 def get_staff_and_farmers():
+    """獲取員工和廠商列表"""
     staff_farmers_df = read_master_data('員工廠商')
     
     staff = staff_farmers_df[staff_farmers_df['類型'] == 'staff']['名稱'].tolist()

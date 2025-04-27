@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from utils.common import REPORTS_PATH, logger
 from models.data_manager import read_master_data, read_transactions, read_inventory
+from database import db_manager
 
 # 生成基本報表（銷售額、廠商分潤、員工分潤）
 def generate_basic_reports(year=None, month=None, start_date=None, end_date=None):

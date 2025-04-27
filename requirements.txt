@@ -8,3 +8,5 @@ werkzeug==2.2.3
 markupsafe==2.1.2
 google-api-python-client
 google-auth-oauthlib
+pysqlite3==0.5.1
+sqlalchemy==2.0.23

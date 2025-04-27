@@ -3,6 +3,7 @@ import pandas as pd
 from utils.common import get_taiwan_time, logger
 from models.data_manager import add_transaction, read_inventory
 from models.inventory import update_inventory_quantity, get_product_details
+from database import db_manager
 
 # 記錄進貨
 def record_purchase(date, supplier, product_name, unit, quantity, unit_price, staff):
