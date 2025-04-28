@@ -4,6 +4,8 @@ from models.data_manager import get_staff_and_farmers, read_inventory, add_new_f
 from models.inventory import get_product_details, get_products_by_supplier
 from models.transactions import record_purchase, record_sale, record_return
 from models.report_generator import generate_reports
+from flask_login import login_required, current_user
+from auth import authorized_required
 import pandas as pd
 import os
 from datetime import datetime
@@ -11,7 +13,9 @@ from datetime import datetime
 main_routes = Blueprint('main_routes', __name__)
 
 # 主頁路由
-@main_routes.route('/')
+@main_routes.route('/index')
+@login_required
+@authorized_required
 def index():
     today = get_taiwan_time().strftime('%Y-%m-%d')
     current_shift = get_current_shift()
@@ -20,12 +24,16 @@ def index():
 
 # 選擇操作頁面
 @main_routes.route('/select_operation')
+@login_required
+@authorized_required
 def select_operation():
     logger.info("訪問選擇操作頁面")
     return render_template('select_operation.html')
 
 # 進貨頁面
 @main_routes.route('/purchase', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def purchase():
     if request.method == 'POST':
         # 從表單提交中提取數據
@@ -87,6 +95,8 @@ def purchase():
 
 # 退貨頁面
 @main_routes.route('/return_goods', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def return_goods():
     if request.method == 'POST':
         # 從表單提交中提取數據
@@ -130,6 +140,8 @@ def return_goods():
 
 # 銷售頁面
 @main_routes.route('/sale', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def sale():
     if request.method == 'POST':
         # 從表單提交中提取數據
@@ -168,6 +180,8 @@ def sale():
 
 # 班別銷售查詢頁面
 @main_routes.route('/shift_sales', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def shift_sales():
     from models.data_manager import read_transactions
     
@@ -209,8 +223,10 @@ def shift_sales():
                            sales_records=sales_records, 
                            total_sales_amount=total_sales_amount)
 
-# 獲取產品詳情API
+# API路由：取得產品詳情
 @main_routes.route('/api/product_details/<product_name>')
+@login_required
+@authorized_required
 def api_product_details(product_name):
     try:
         # 打印診斷信息
@@ -238,8 +254,10 @@ def api_product_details(product_name):
         logger.error(traceback.format_exc())
         return jsonify({"error": f"發生錯誤: {str(e)}"}), 500
 
-# 獲取廠商產品API
+# API路由：取得廠商產品列表
 @main_routes.route('/api/supplier_products/<supplier_name>')
+@login_required
+@authorized_required
 def api_supplier_products(supplier_name):
     try:
         # 打印診斷信息
@@ -264,8 +282,10 @@ def api_supplier_products(supplier_name):
         logger.error(traceback.format_exc())
         return jsonify({"error": f"發生錯誤: {str(e)}"}), 500
 
-# 庫存API
+# API路由：取得庫存數據
 @main_routes.route('/api/inventory')
+@login_required
+@authorized_required
 def api_inventory():
     logger.info("訪問庫存API")
     inventory_data = read_inventory()
@@ -273,14 +293,18 @@ def api_inventory():
 
 # 庫存頁面
 @main_routes.route('/inventory')
+@login_required
+@authorized_required
 def inventory():
     logger.info("訪問庫存頁面")
     inventory_data = read_inventory()
     logger.info(f"庫存數據計數：{len(inventory_data)}")
     return render_template('inventory.html', inventory=inventory_data.to_dict('records'))
 
-# 報表下載功能
+# 下載報表檔案
 @main_routes.route('/download_report/<path:path>')
+@login_required
+@authorized_required
 def download_report(path):
     from utils.common import REPORTS_PATH
     import os
@@ -292,8 +316,10 @@ def download_report(path):
     else:
         return f"找不到報表文件: {path}", 404
 
-# 生成報表頁面
+# 報表生成頁面
 @main_routes.route('/generate_reports', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def generate_reports_route():
     if request.method == 'POST':
         # 從表單提取報表參數
@@ -363,8 +389,10 @@ def generate_reports_route():
     return render_template('generate_reports.html', years=years, months=months, 
                           current_year=current_year, current_month=current_month)
 
-# 管理頁面登入
+# 系統管理登入
 @main_routes.route('/admin', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def admin_login():
     if request.method == 'POST':
         password = request.form.get('password')
@@ -377,8 +405,10 @@ def admin_login():
             flash("密碼錯誤，請重新輸入")
     return render_template('admin_login.html')
 
-# 管理頁面
+# 系統管理儀表板
 @main_routes.route('/admin/dashboard')
+@login_required
+@authorized_required
 def admin_dashboard():
     if not session.get('admin_logged_in'):
         logger.warning("未授權的管理頁面訪問嘗試")
@@ -388,8 +418,10 @@ def admin_dashboard():
     logger.info("訪問管理控制台")
     return render_template('admin_dashboard.html')
 
-# 系統配置管理
+# 系統設定頁面
 @main_routes.route('/admin/system_config', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def admin_system_config():
     if not session.get('admin_logged_in'):
         return redirect(url_for('main_routes.admin_login'))
@@ -426,8 +458,10 @@ def admin_system_config():
     
     return render_template('admin_system_config.html', system_config=system_config.to_dict('records'))
 
-# 員工與廠商管理
+# 員工與廠商管理頁面
 @main_routes.route('/admin/staff_farmers', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def admin_staff_farmers():
     if not session.get('admin_logged_in'):
         return redirect(url_for('main_routes.admin_login'))
@@ -466,8 +500,10 @@ def admin_staff_farmers():
     
     return render_template('admin_staff_farmers.html', staff_farmers=staff_farmers.to_dict('records'))
 
-# 庫存管理
+# 庫存管理頁面
 @main_routes.route('/admin/inventory', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def admin_inventory():
     if not session.get('admin_logged_in'):
         return redirect(url_for('main_routes.admin_login'))
@@ -514,8 +550,10 @@ def admin_inventory():
     
     return render_template('admin_inventory.html', inventory=inventory_data.to_dict('records'))
 
-# 交易記錄管理
+# 交易紀錄管理頁面
 @main_routes.route('/admin/transactions', methods=['GET', 'POST'])
+@login_required
+@authorized_required
 def admin_transactions():
     if not session.get('admin_logged_in'):
         return redirect(url_for('main_routes.admin_login'))
@@ -542,8 +580,10 @@ def admin_transactions():
     
     return render_template('admin_transactions.html', transactions=transactions_data.to_dict('records'))
 
-# 登出管理頁面
+# 管理員登出
 @main_routes.route('/admin/logout')
+@login_required
+@authorized_required
 def admin_logout():
     session.pop('admin_logged_in', None)
     logger.info("管理員登出")

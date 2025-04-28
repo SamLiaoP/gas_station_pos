@@ -2,3 +2,25 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# 敏感文件
+.env
+*.env
+*.pem
+*.key
+
+# 憑證文件
+/credentials/
+token.json
+credentials.json
+config/token.pickle
+config/credentials.json
+*.pickle
+
+# 數據庫
+*.db
+*.sqlite3
+
+# 日誌
+/logs/
+*.log

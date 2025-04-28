@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}登入 - 加油站POS系統{% endblock %}
+
+{% block style %}
+<style>
+    .login-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+        background-color: white;
+        margin-top: 5rem;
+    }
+    
+    .logo {
+        margin-bottom: 2rem;
+        font-size: 2rem;
+        color: #2d45b3;
+    }
+    
+    .google-btn {
+        background-color: #4285F4;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 4px;
+        font-size: 16px;
+        margin-top: 20px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        transition: background-color 0.3s;
+    }
+    
+    .google-btn:hover {
+        background-color: #357ae8;
+        text-decoration: none;
+        color: white;
+    }
+    
+    .google-icon {
+        background-color: white;
+        padding: 8px;
+        border-radius: 50%;
+        margin-right: 10px;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .alert-container {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="login-container">
+        <div class="logo">
+            <i class="fas fa-gas-pump"></i>
+            <h2>加油站POS系統</h2>
+        </div>
+        
+        <div class="alert-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+        
+        <p class="lead">請使用Google帳號登入系統</p>
+        
+        <a href="{{ url_for('auth.google_login') }}" class="google-btn">
+            <span class="google-icon">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="18" height="18" alt="Google logo">
+            </span>
+            使用Google帳號登入
+        </a>
+    </div>
+</div>
+{% endblock %} 
