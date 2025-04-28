@@ -1,0 +1,22 @@
+{
+    "app": {
+        "SECRET_KEY": "請替換為隨機生成的密鑰，例如使用 secrets.token_hex(16) 生成"
+    },
+    "google_oauth": {
+        "GOOGLE_CLIENT_ID": "請在此填入您的Google客戶端ID",
+        "GOOGLE_CLIENT_SECRET": "請在此填入您的Google客戶端密鑰",
+        "GOOGLE_DISCOVERY_URL": "https://accounts.google.com/.well-known/openid-configuration"
+    },
+    "auth": {
+        "AUTHORIZED_EMAILS": [
+            "請填入授權使用者的電子郵件",
+            "可以添加多個電子郵件"
+        ]
+    },
+    "database": {
+        "DB_PATH": "data/gas_station.db"
+    },
+    "testing": {
+        "TESTING": "False"
+    }
+} 

@@ -1,19 +1,35 @@
 import os
 import secrets
-from dotenv import load_dotenv
+import json
+import logging
 
-# 確保環境變數已載入
-load_dotenv()
+# 從config.json讀取配置
+def load_config():
+    try:
+        with open('config.json', 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        logging.error("config.json文件不存在")
+        return {}
+    except json.JSONDecodeError:
+        logging.error("config.json格式錯誤")
+        return {}
+
+# 載入配置
+config_data = load_config()
 
 # 應用程式配置
 class Config:
     # 安全設定
-    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(16)
+    SECRET_KEY = config_data.get('app', {}).get('SECRET_KEY') or secrets.token_hex(16)
     
     # Google OAuth 設定
-    GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
-    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
-    GOOGLE_DISCOVERY_URL = 'https://accounts.google.com/.well-known/openid-configuration'
+    GOOGLE_CLIENT_ID = config_data.get('google_oauth', {}).get('GOOGLE_CLIENT_ID', '')
+    GOOGLE_CLIENT_SECRET = config_data.get('google_oauth', {}).get('GOOGLE_CLIENT_SECRET', '')
+    GOOGLE_DISCOVERY_URL = config_data.get('google_oauth', {}).get('GOOGLE_DISCOVERY_URL', 'https://accounts.google.com/.well-known/openid-configuration')
+    
+    # 測試模式設定
+    TESTING = config_data.get('testing', {}).get('TESTING', 'False')
     
     # 授權用戶清單 - 只有這些郵箱地址可以登入系統
     AUTHORIZED_EMAILS = [
@@ -21,16 +37,15 @@ class Config:
         'ba88052@gmail.com',
     ]
     
-    # 從環境變數中讀取授權用戶
-    if os.environ.get('AUTHORIZED_EMAILS'):
-        env_emails = os.environ.get('AUTHORIZED_EMAILS').split(',')
-        for email in env_emails:
-            if email.strip() and email.strip() not in AUTHORIZED_EMAILS:
-                AUTHORIZED_EMAILS.append(email.strip())
+    # 從配置檔案中讀取授權用戶
+    config_emails = config_data.get('auth', {}).get('AUTHORIZED_EMAILS', [])
+    for email in config_emails:
+        if email and email not in AUTHORIZED_EMAILS:
+            AUTHORIZED_EMAILS.append(email)
     
     # 如果處於測試模式，添加測試用戶到授權清單
-    if os.environ.get('TESTING') == 'True':
+    if TESTING == 'True':
         AUTHORIZED_EMAILS.append('test@example.com')
     
     # 資料庫路徑
-    DB_PATH = os.environ.get('DB_PATH') or os.path.join('data', 'gas_station.db') 
+    DB_PATH = config_data.get('database', {}).get('DB_PATH') or os.path.join('data', 'gas_station.db') 

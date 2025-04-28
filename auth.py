@@ -5,7 +5,6 @@ import json
 from functools import wraps
 from utils.common import logger
 from config import Config
-import os
 
 # 建立認證藍圖
 auth = Blueprint('auth', __name__)
@@ -49,7 +48,8 @@ def authorized_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # 測試模式下跳過授權檢查
-        if os.environ.get('TESTING') == 'True':
+        # 從配置中讀取測試模式設置
+        if Config.TESTING == 'True':
             return f(*args, **kwargs)
             
         if not current_user.is_authenticated:
@@ -68,7 +68,8 @@ def authorized_required(f):
 @auth.route('/login')
 def login():
     # 測試模式下自動登入
-    if os.environ.get('TESTING') == 'True':
+    # 從配置中讀取測試模式設置
+    if Config.TESTING == 'True':
         # 創建測試用戶
         user = User(
             id='test_user_id',

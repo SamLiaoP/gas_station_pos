@@ -101,27 +101,27 @@ Copyright © 2025. 保留所有權利。
 
 為了確保系統安全，請按照以下步驟配置敏感資訊：
 
-1. **創建環境變數文件**：
-   - 方法一：使用我們的輔助腳本自動設置環境變數
+1. **創建配置文件**：
+   - 方法一：使用我們的輔助腳本自動設置配置
      ```bash
-     ./setup_env.sh
+     ./setup_config.sh
      ```
    - 方法二：手動複製並編輯
      ```bash
-     cp env.example .env
+     cp config.json.example config.json
      ```
    - 填入您的實際配置資訊（不要在公開場合分享這些資訊）
 
 2. **確保敏感文件不被提交**：
    - `.gitignore` 已設置忽略以下敏感文件：
-     - `.env` 檔案（包含環境變數）
+     - `config.json` 檔案（包含系統配置）
      - `credentials.json`（Google API憑證）
      - `token.json` 和 `token.pickle`（認證令牌）
      - 數據庫文件（`.db` 和 `.sqlite3`）
    - 永遠不要手動覆蓋這些設置
 
-3. **使用環境變數載入敏感資訊**：
-   - 運行系統前，請使用 `source set_env.sh` 載入環境變數
+3. **使用配置文件載入敏感資訊**：
+   - 系統會自動從 `config.json` 載入配置
    - 不要直接在程式碼中硬編碼任何敏感資訊
 
 4. **Google雲端功能配置**：
