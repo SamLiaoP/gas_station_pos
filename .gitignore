@@ -10,6 +10,7 @@ __pycache__/
 *.key
 .config.json
 
+
 # 憑證文件
 /credentials/
 token.json

@@ -6,6 +6,8 @@ from database import db_manager
 from auth import auth, login_manager, authorized_required
 from config import Config
 import os
+from apscheduler.schedulers.background import BackgroundScheduler
+from utils.backup_utils import backup_database_to_gdrive
 
 # 創建並配置應用
 def create_app():
@@ -39,6 +41,14 @@ def create_app():
     # 註冊路由藍圖
     app.register_blueprint(auth)
     app.register_blueprint(main_routes)
+    
+    # 初始化並啟動排程器
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(backup_database_to_gdrive, 'cron', 
+                      hour=Config.BACKUP_SCHEDULE_HOUR, 
+                      minute=Config.BACKUP_SCHEDULE_MINUTE)
+    scheduler.start()
+    logger.info(f"資料庫備份已排程於每日 {Config.BACKUP_SCHEDULE_HOUR:02d}:{Config.BACKUP_SCHEDULE_MINUTE:02d}")
     
     # 保護所有主要路由需要登入
     @app.before_request

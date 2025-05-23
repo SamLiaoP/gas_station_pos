@@ -125,11 +125,57 @@
                 <p>查詢和管理所有交易記錄</p>
                 <a href="{{ url_for('main_routes.admin_transactions') }}">查看</a>
             </div>
+            
+            <div class="admin-card">
+                <h3>手動備份</h3>
+                <p>立即將目前資料庫備份到Google Drive</p>
+                <button id="triggerBackupBtn" class="admin-button" style="background-color: #FF8C00;">立即備份</button>
+            </div>
         </div>
         
         <div style="margin-top: 30px; text-align: center;">
             <a href="{{ url_for('main_routes.index') }}">返回首頁</a>
         </div>
     </div>
+    <script>
+        // 可能有其他現有的 JavaScript
+        document.addEventListener('DOMContentLoaded', function() {
+            const triggerBackupBtn = document.getElementById('triggerBackupBtn');
+            if (triggerBackupBtn) {
+                triggerBackupBtn.addEventListener('click', function() {
+                    if (!confirm('確定要立即執行資料庫備份嗎？此操作可能需要一些時間。')) {
+                        return;
+                    }
+                    triggerBackupBtn.disabled = true;
+                    triggerBackupBtn.innerText = '備份中...';
+
+                    fetch("{{ url_for('main_routes.trigger_backup_route') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            // 如果您的 CSRF 保護是啟用的，您可能需要添加 CSRF token
+                            // 例如： 'X-CSRFToken': '您的CSRF權杖變數或函數' 
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('成功啟動備份！\n' + data.message);
+                        } else {
+                            alert('備份失敗！\n' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error triggering backup:', error);
+                        alert('觸發備份時發生網路或客戶端錯誤。');
+                    })
+                    .finally(() => {
+                        triggerBackupBtn.disabled = false;
+                        triggerBackupBtn.innerText = '立即備份';
+                    });
+                });
+            }
+        });
+    </script>
 </body>
 </html> 

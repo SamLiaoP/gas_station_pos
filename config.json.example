@@ -7,6 +7,12 @@
         "GOOGLE_CLIENT_SECRET": "請在此填入您的Google客戶端密鑰",
         "GOOGLE_DISCOVERY_URL": "https://accounts.google.com/.well-known/openid-configuration"
     },
+    "google_drive": {
+        "CREDENTIALS_PATH": "config/credentials.json",
+        "TOKEN_PATH": "config/token.pickle",
+        "ROOT_FOLDER_NAME": "GAS_STATION_POS_BACKUPS",
+        "BACKUP_SUBFOLDER_NAME": "database_archive"
+    },
     "auth": {
         "AUTHORIZED_EMAILS": [
             "請填入授權使用者的電子郵件",
@@ -18,5 +24,9 @@
     },
     "testing": {
         "TESTING": "False"
+    },
+    "backup": {
+        "SCHEDULE_HOUR": 3,
+        "SCHEDULE_MINUTE": 0
     }
 } 

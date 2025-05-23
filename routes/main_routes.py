@@ -9,6 +9,7 @@ from auth import authorized_required
 import pandas as pd
 import os
 from datetime import datetime
+from utils.backup_utils import backup_database_to_gdrive
 
 main_routes = Blueprint('main_routes', __name__)
 
@@ -579,6 +580,26 @@ def admin_transactions():
     transactions_data = read_transactions()
     
     return render_template('admin_transactions.html', transactions=transactions_data.to_dict('records'))
+
+# 手動觸發資料庫備份
+@main_routes.route('/admin/trigger_backup', methods=['POST'])
+@login_required
+@authorized_required
+def trigger_backup_route():
+    if not session.get('admin_logged_in'):
+        logger.warning("未經授權的備份觸發嘗試")
+        return jsonify({'success': False, 'message': '權限不足，請以管理員身份登入'}), 403
+
+    try:
+        logger.info(f"管理員 {current_user.email} 手動觸發資料庫備份")
+        backup_database_to_gdrive() # 執行備份函數
+        flash("資料庫備份已成功啟動。請稍後檢查 Google Drive。", "success")
+        logger.info("手動資料庫備份成功啟動")
+        return jsonify({'success': True, 'message': '資料庫備份已成功啟動。請稍後檢查 Google Drive。'})
+    except Exception as e:
+        logger.error(f"手動觸發資料庫備份失敗: {e}")
+        flash(f"資料庫備份失敗: {str(e)}", "error")
+        return jsonify({'success': False, 'message': f'資料庫備份失敗: {str(e)}'}), 500
 
 # 管理員登出
 @main_routes.route('/admin/logout')

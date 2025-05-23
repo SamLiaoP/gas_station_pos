@@ -14,6 +14,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google.auth.exceptions import RefreshError
 import time
+from config import Config # 延遲導入以避免循環
 
 # 設置日誌
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class GoogleDriveConnector:
         self.token_path = token_path
         self.service = None
         self.root_folder_id = None
-        self.root_folder_name = 'GAS_STATION_POS'
+        self.root_folder_name = Config.GOOGLE_DRIVE_ROOT_FOLDER_NAME # 從 Config 讀取
         self.authorized = False
         
     def authenticate(self) -> bool:
@@ -124,46 +125,57 @@ class GoogleDriveConnector:
             self.root_folder_id = folder.get('id')
             logger.info(f"已創建新的根文件夾: {self.root_folder_name}")
         
-        # 確保存在data和reports子文件夾
-        self._ensure_subfolder('data')
-        self._ensure_subfolder('reports')
+        # 確保存在data和reports子文件夾 (移除這兩行，讓呼叫者自行決定創建子目錄)
+        # self._ensure_subfolder('data')
+        # self._ensure_subfolder('reports')
     
-    def _ensure_subfolder(self, folder_name: str) -> Optional[str]:
+    def _ensure_subfolder(self, subfolder_name: str) -> Optional[str]:
         """
-        確保在根文件夾下存在指定的子文件夾
-        
+        確保指定的子文件夾存在於根目錄下，如果不存在則創建它。
+
         參數:
-            folder_name (str): 子文件夾名稱
-            
+            subfolder_name (str): 子文件夾的名稱。
+
         返回:
-            Optional[str]: 子文件夾ID，如果失敗則為None
+            Optional[str]: 子文件夾的ID，如果失敗則為None。
         """
         if not self.service or not self.root_folder_id:
-            logger.error("未認證或無根文件夾，無法創建子文件夾")
+            logger.error("未認證或根目錄不存在，無法創建子文件夾")
             return None
         
-        # 查找子文件夾
-        query = f"name = '{folder_name}' and '{self.root_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        query = f"name = '{subfolder_name}' and '{self.root_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
         items = results.get('files', [])
         
         if items:
-            # 找到現有文件夾
-            subfolder_id = items[0]['id']
-            logger.info(f"找到現有子文件夾: {folder_name}")
-            return subfolder_id
+            logger.info(f"找到現有子文件夾: {subfolder_name}")
+            return items[0]['id']
         else:
-            # 創建新文件夾
+            logger.info(f"子文件夾 '{subfolder_name}' 不存在，正在創建...")
             folder_metadata = {
-                'name': folder_name,
+                'name': subfolder_name,
                 'mimeType': 'application/vnd.google-apps.folder',
                 'parents': [self.root_folder_id]
             }
-            folder = self.service.files().create(body=folder_metadata, fields='id').execute()
-            subfolder_id = folder.get('id')
-            logger.info(f"已創建新的子文件夾: {folder_name}")
-            return subfolder_id
-    
+            try:
+                folder = self.service.files().create(body=folder_metadata, fields='id').execute()
+                logger.info(f"已成功創建子文件夾: {subfolder_name} (ID: {folder.get('id')})")
+                return folder.get('id')
+            except Exception as e:
+                logger.error(f"創建子文件夾 '{subfolder_name}' 失敗: {e}")
+                return None
+                
+    def get_or_create_subfolder(self, subfolder_name: str) -> Optional[str]:
+        """
+        公開的輔助函式，用於取得或建立子文件夾。
+        主要由 backup_utils 使用。
+        """
+        if not self.authorized:
+            if not self.authenticate():
+                logger.error("Google Drive 認證失敗，無法操作子文件夾。")
+                return None
+        return self._ensure_subfolder(subfolder_name)
+
     def get_folder_id(self, path: str) -> Optional[str]:
         """
         獲取指定路徑的文件夾ID
@@ -267,71 +279,49 @@ class GoogleDriveConnector:
         
         return items[0] if items else None
     
-    def upload_file(self, local_path: str, remote_folder_path: Optional[str] = None, remote_filename: Optional[str] = None) -> Optional[str]:
+    def upload_file(self, local_path: str, remote_filename: str, remote_folder_id: Optional[str] = None) -> Optional[str]:
         """
-        將文件上傳到Google Drive
-        
+        上傳文件到Google Drive的指定文件夾（如果提供），否則到根目錄下的 'data' 子文件夾。
+
         參數:
             local_path (str): 本地文件路徑
-            remote_folder_path (Optional[str]): 雲端文件夾路徑，默認為根文件夾
-            remote_filename (Optional[str]): 雲端文件名稱，默認使用本地文件名
-            
+            remote_filename (str): 在Google Drive上保存的文件名
+            remote_folder_id (Optional[str]): 目標文件夾的ID。如果為None，則使用 'data' 子文件夾。
+
         返回:
-            Optional[str]: 上傳的文件ID，如果失敗則為None
+            Optional[str]: 上傳成功則返回文件ID，否則返回None
         """
         if not self.service:
-            if not self.authenticate():
-                return None
-        
-        if not os.path.exists(local_path):
-            logger.error(f"本地文件不存在: {local_path}")
+            logger.error("未認證，無法上傳文件")
             return None
         
-        # 獲取父文件夾ID
-        parent_id = self.root_folder_id
-        if remote_folder_path:
-            parent_id = self.ensure_directory(remote_folder_path)
-            if not parent_id:
-                logger.error(f"無法確保文件夾存在: {remote_folder_path}")
+        if not self.authorized:
+            if not self.authenticate(): # 確保已認證
+                logger.error("Google Drive 認證失敗，無法上傳檔案。")
                 return None
-        
-        # 決定文件名
-        if not remote_filename:
-            remote_filename = os.path.basename(local_path)
-        
-        # 檢查文件是否已存在
-        existing_file = self.find_file(remote_filename, remote_folder_path)
-        
-        # 準備上傳
+
+        target_folder_id = remote_folder_id
+        if target_folder_id is None:
+            # 如果未指定 remote_folder_id，預設上傳到 root_folder_name 下的 'data' 子目錄
+            data_folder_id = self._ensure_subfolder('data')
+            if not data_folder_id:
+                logger.error("無法找到或建立 'data' 子目錄於 Google Drive。檔案未上傳。")
+                return None
+            target_folder_id = data_folder_id
+
         file_metadata = {
             'name': remote_filename,
-            'parents': [parent_id]
+            'parents': [target_folder_id] # 指定父文件夾
         }
-        
         media = MediaFileUpload(local_path, resumable=True)
-        
         try:
-            if existing_file:
-                # 更新現有文件
-                file = self.service.files().update(
-                    fileId=existing_file['id'],
-                    body={'name': remote_filename},
-                    media_body=media,
-                    fields='id'
-                ).execute()
-                logger.info(f"已更新文件: {remote_filename}")
-                return file.get('id')
-            else:
-                # 創建新文件
-                file = self.service.files().create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields='id'
-                ).execute()
-                logger.info(f"已上傳文件: {remote_filename}")
-                return file.get('id')
+            file = self.service.files().create(body=file_metadata,
+                                                media_body=media,
+                                                fields='id').execute()
+            logger.info(f"文件 '{remote_filename}' 已成功上傳到 Google Drive 文件夾 ID '{target_folder_id}' (文件ID: {file.get('id')})")
+            return file.get('id')
         except Exception as e:
-            logger.error(f"上傳文件 {remote_filename} 時出錯: {str(e)}")
+            logger.error(f"上傳文件 '{remote_filename}' 到 Google Drive 失敗: {e}")
             return None
     
     def download_file(self, file_id: str, local_path: str) -> bool:

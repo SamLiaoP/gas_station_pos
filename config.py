@@ -28,6 +28,14 @@ class Config:
     GOOGLE_CLIENT_SECRET = config_data.get('google_oauth', {}).get('GOOGLE_CLIENT_SECRET', '')
     GOOGLE_DISCOVERY_URL = config_data.get('google_oauth', {}).get('GOOGLE_DISCOVERY_URL', 'https://accounts.google.com/.well-known/openid-configuration')
     
+    # Google Drive API 設定
+    GOOGLE_DRIVE_CREDENTIALS_PATH = config_data.get('google_drive', {}).get('CREDENTIALS_PATH', 'config/credentials.json')
+    GOOGLE_DRIVE_TOKEN_PATH = config_data.get('google_drive', {}).get('TOKEN_PATH', 'config/token.pickle')
+    BACKUP_SCHEDULE_HOUR = config_data.get('backup', {}).get('SCHEDULE_HOUR', 3) # 預設備份時間為凌晨3點
+    BACKUP_SCHEDULE_MINUTE = config_data.get('backup', {}).get('SCHEDULE_MINUTE', 0)
+    GOOGLE_DRIVE_ROOT_FOLDER_NAME = config_data.get('google_drive', {}).get('ROOT_FOLDER_NAME', 'GAS_STATION_POS')
+    GOOGLE_DRIVE_BACKUP_SUBFOLDER_NAME = config_data.get('google_drive', {}).get('BACKUP_SUBFOLDER_NAME', 'database_backups') # 改成更明確的名稱
+    
     # 測試模式設定
     TESTING = config_data.get('testing', {}).get('TESTING', 'False')
     
