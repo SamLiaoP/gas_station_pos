@@ -8,7 +8,7 @@ __pycache__/
 *.env
 *.pem
 *.key
-.config.json
+config.json
 
 
 # 憑證文件

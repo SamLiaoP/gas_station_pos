@@ -25,6 +25,7 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
         sales_df = read_transactions('銷售', start_date, end_date)
         purchases_df = read_transactions('進貨', start_date, end_date)
         returns_df = read_transactions('退貨', start_date, end_date)
+        sales_returns_df = read_transactions('銷退', start_date, end_date)
         
         # 讀取當前庫存
         inventory_df = read_inventory()
@@ -33,7 +34,7 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
         staff_farmers_df = read_master_data('員工廠商')
         
         # 如果沒有銷售數據，返回 False
-        if sales_df.empty and purchases_df.empty and returns_df.empty:
+        if sales_df.empty and purchases_df.empty and returns_df.empty and sales_returns_df.empty:
             logger.warning(f"找不到指定期間的交易數據: {date_range_str}")
             return False, None, []
         
@@ -49,20 +50,20 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
             
             # 獲取屬於該廠商的產品銷售記錄
             farmer_sales = sales_df[sales_df['供應商'] == farmer_name]
-            total_sales = farmer_sales['總價'].sum() if not farmer_sales.empty else 0
-            commission_amount = total_sales * commission_rate
+            total_sales_for_farmer = farmer_sales['總價'].sum() if not farmer_sales.empty else 0
+            commission_amount = total_sales_for_farmer * commission_rate
             
             # 添加到報表
             new_row = pd.DataFrame({
                 '廠商': [farmer_name],
-                '總銷售額': [total_sales],
+                '總銷售額': [total_sales_for_farmer],
                 '分潤比例': [commission_rate],
                 '分潤金額': [commission_amount]
             })
             farmer_report = pd.concat([farmer_report, new_row], ignore_index=True)
         
         # 2. 員工月報
-        staff_report = pd.DataFrame(columns=['員工', '總銷售額', '分潤比例', '分潤金額'])
+        staff_report = pd.DataFrame(columns=['員工', '總銷售額', '銷退總額', '淨銷售額', '分潤比例', '分潤金額'])
         
         # 獲取所有員工
         staffs = staff_farmers_df[staff_farmers_df['類型'] == 'staff']
@@ -71,32 +72,61 @@ def generate_basic_reports(year=None, month=None, start_date=None, end_date=None
             staff_name = staff['名稱']
             commission_rate = staff['分潤比例']
             
-            # 計算銷售總額
+            # 計算銷售總額 (毛銷售)
             staff_sales = sales_df[sales_df['員工'] == staff_name]
-            total_sales = staff_sales['總價'].sum() if not staff_sales.empty else 0
-            commission_amount = total_sales * commission_rate
+            total_staff_gross_sales = staff_sales['總價'].sum() if not staff_sales.empty else 0
+            
+            # 計算該員工處理的銷退總額 (本身為負數)
+            staff_sales_returns = sales_returns_df[sales_returns_df['員工'] == staff_name]
+            total_staff_sales_returns = staff_sales_returns['總價'].sum() if not staff_sales_returns.empty else 0
+            
+            # 員工的淨銷售額 = 毛銷售 + 銷退總額 (銷退總額是負的)
+            net_staff_sales = total_staff_gross_sales + total_staff_sales_returns
+            commission_amount = net_staff_sales * commission_rate
             
             # 添加到報表
             new_row = pd.DataFrame({
                 '員工': [staff_name],
-                '總銷售額': [total_sales],
+                '總銷售額': [total_staff_gross_sales],
+                '銷退總額': [total_staff_sales_returns],
+                '淨銷售額': [net_staff_sales],
                 '分潤比例': [commission_rate],
                 '分潤金額': [commission_amount]
             })
             staff_report = pd.concat([staff_report, new_row], ignore_index=True)
         
         # 3. 收支表月報
-        total_sales = sales_df['總價'].sum() if not sales_df.empty else 0
+        total_gross_sales = sales_df['總價'].sum() if not sales_df.empty else 0
+        total_sales_returns_value = sales_returns_df['總價'].sum() if not sales_returns_df.empty else 0
+        net_revenue = total_gross_sales + total_sales_returns_value
+
         total_purchases = purchases_df['總價'].sum() if not purchases_df.empty else 0
-        total_returns = returns_df['總價'].sum() if not returns_df.empty else 0
-        staff_commission = staff_report['分潤金額'].sum()
-        farmer_commission = farmer_report['分潤金額'].sum()
-        net_profit = total_sales - staff_commission - farmer_commission
+        total_supplier_returns = returns_df['總價'].sum() if not returns_df.empty else 0
         
-        financial_report = pd.DataFrame({
-            '項目': ['總營業額', '進貨成本', '退貨金額', '員工分潤', '廠商分潤', '淨利潤'],
-            '金額': [total_sales, total_purchases, total_returns, staff_commission, farmer_commission, net_profit]
-        })
+        staff_commission_total = staff_report['分潤金額'].sum()
+        farmer_commission_total = farmer_report['分潤金額'].sum()
+        
+        # 淨利潤 = 淨營收 - (所有成本和支出)
+        # 這裡的 "退貨金額" 應指對供應商的退貨成本減少
+        # 而 "銷退總額" 是營收的減少
+        # 假設 進貨成本 和 對供應商退貨 已是淨成本
+        
+        cost_of_goods_sold_placeholder = total_purchases + total_supplier_returns
+        profit_or_loss = net_revenue - staff_commission_total - farmer_commission_total - total_purchases
+        profit_or_loss += total_supplier_returns
+
+        financial_report_data = {
+            '項目': ['總銷售額(毛額)', '銷退總額', '淨營業額', '總進貨成本', '對供應商退貨(成本減少)', '員工總分潤', '廠商總分潤', '預估損益'],
+            '金額': [total_gross_sales, total_sales_returns_value, net_revenue, total_purchases, total_supplier_returns, staff_commission_total, farmer_commission_total, profit_or_loss]
+        }
+        
+        # 檢查 staff_report 是否有 '銷退總額' 和 '淨銷售額' 列，如果沒有則創建它們（例如，如果沒有任何銷退記錄）
+        if '銷退總額' not in staff_report.columns:
+            staff_report['銷退總額'] = 0
+        if '淨銷售額' not in staff_report.columns:
+            staff_report['淨銷售額'] = staff_report['總銷售額']
+
+        financial_report = pd.DataFrame(financial_report_data)
         
         # 保存報表
         farmer_report.to_excel(os.path.join(report_dir, '廠商月報.xlsx'), index=False)
@@ -138,6 +168,7 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
         sales_df = read_transactions('銷售', start_date, end_date)
         purchases_df = read_transactions('進貨', start_date, end_date)
         returns_df = read_transactions('退貨', start_date, end_date)
+        sales_returns_df = read_transactions('銷退', start_date, end_date)
         
         # 讀取當前庫存
         inventory_df = read_inventory()
@@ -155,9 +186,16 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
             farmer_name = farmer['名稱']
             commission_rate = farmer['分潤比例']
             
-            # 篩選該廠商的銷售記錄
+            # 篩選該廠商的銷售記錄 (毛銷售)
             farmer_sales = sales_df[sales_df['供應商'] == farmer_name]
-            total_sales = farmer_sales['總價'].sum() if not farmer_sales.empty else 0
+            total_sales_for_farmer = farmer_sales['總價'].sum() if not farmer_sales.empty else 0
+            
+            # 新增：篩選該廠商產品的銷退記錄 (如果需要追溯到原供應商)
+            # 目前假設銷退不直接扣減廠商分潤，所以這部分暫不影響廠商的 commission_amount
+            # 但可以在廠商詳細報表中列出，以供參考
+            farmer_product_names = inventory_df[inventory_df['供應商'] == farmer_name]['產品名稱'].unique()
+            farmer_sales_returns = sales_returns_df[sales_returns_df['產品名稱'].isin(farmer_product_names)]
+            total_sales_returns_for_farmer_products = farmer_sales_returns['總價'].sum() if not farmer_sales_returns.empty else 0
             
             # 篩選該廠商的進貨記錄
             farmer_purchases = purchases_df[purchases_df['供應商'] == farmer_name]
@@ -167,8 +205,8 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
             farmer_returns = returns_df[returns_df['供應商'] == farmer_name]
             total_returns = farmer_returns['總價'].sum() if not farmer_returns.empty else 0
             
-            # 計算廠商分潤金額
-            commission_amount = total_sales * commission_rate
+            # 計算廠商分潤金額 (基於毛銷售額，按先前討論)
+            commission_amount = total_sales_for_farmer * commission_rate
             
             # 計算庫存價值
             current_inventory = inventory_df[inventory_df['供應商'] == farmer_name]
@@ -179,9 +217,9 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
             with pd.ExcelWriter(report_path) as writer:
                 # 1. 總覽工作表
                 summary_df = pd.DataFrame({
-                    '項目': ['廠商名稱', '報表期間', '銷售總額', '進貨總額', '退貨總額', '分潤比例', '分潤金額', '庫存價值'],
-                    '內容': [farmer_name, date_range_str, total_sales, total_purchases, 
-                            total_returns, f"{commission_rate:.2%}", commission_amount, inventory_value]
+                    '項目': ['廠商名稱', '報表期間', '銷售總額(毛額)', '相關產品銷退總額', '進貨總額', '退貨總額', '分潤比例', '分潤金額', '庫存價值'],
+                    '內容': [farmer_name, date_range_str, total_sales_for_farmer, total_sales_returns_for_farmer_products, 
+                           total_purchases, total_returns, f"{commission_rate:.2%}", commission_amount, inventory_value]
                 })
                 summary_df.to_excel(writer, sheet_name='總覽', index=False)
                 
@@ -196,7 +234,7 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
                     pd.DataFrame(columns=['日期', '時間', '產品名稱', '單位', '數量', '單價', '總價', '員工'])\
                       .to_excel(writer, sheet_name='進貨明細', index=False)
                 
-                # 3. 銷售明細表
+                # 3. 銷售明細表 (毛銷售)
                 if not farmer_sales.empty:
                     # 只保留需要的列
                     columns_to_keep = ['日期', '時間', '班別', '產品名稱', '單位', '數量', '單價', '總價', '員工']
@@ -207,7 +245,7 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
                     pd.DataFrame(columns=['日期', '時間', '班別', '產品名稱', '單位', '數量', '單價', '總價', '員工'])\
                       .to_excel(writer, sheet_name='銷售明細', index=False)
                 
-                # 4. 退貨明細表
+                # 4. 退貨明細表 (對供應商的退貨)
                 if not farmer_returns.empty:
                     # 只保留需要的列
                     columns_to_keep = ['日期', '時間', '產品名稱', '單位', '數量', '單價', '總價', '員工', '退貨原因']
@@ -217,6 +255,15 @@ def generate_farmer_detailed_reports(year=None, month=None, start_date=None, end
                     # 如果沒有退貨記錄，創建空白工作表
                     pd.DataFrame(columns=['日期', '時間', '產品名稱', '單位', '數量', '單價', '總價', '員工', '退貨原因'])\
                       .to_excel(writer, sheet_name='退貨明細', index=False)
+                
+                # 新增 4.1. 相關產品銷退明細表 (顧客銷貨退回中，屬於該廠商產品的部分)
+                if not farmer_sales_returns.empty:
+                    columns_to_keep_sr = ['日期', '時間', '班別', '產品名稱', '單位', '數量', '單價', '總價', '員工', '備註']
+                    columns_to_keep_sr = [col for col in columns_to_keep_sr if col in farmer_sales_returns.columns]
+                    farmer_sales_returns[columns_to_keep_sr].to_excel(writer, sheet_name='相關產品銷退明細', index=False)
+                else:
+                    pd.DataFrame(columns=['日期', '時間', '班別', '產品名稱', '單位', '數量', '單價', '總價', '員工', '備註'])\
+                      .to_excel(writer, sheet_name='相關產品銷退明細', index=False)
                 
                 # 5. 庫存明細表
                 if not current_inventory.empty:

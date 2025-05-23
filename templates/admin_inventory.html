@@ -149,7 +149,7 @@
                         <td><input type="number" name="quantity" value="{{ item['數量'] }}" min="0" step="0.01" required></td>
                         <td><input type="number" name="unit_price" value="{{ item['單價'] }}" min="0" step="0.01" required></td>
                         <td><input type="text" name="supplier" value="{{ item['供應商'] }}" required></td>
-                        <td><button type="button" onclick="removeRow(this)" class="admin-button" style="background-color: #dc3545;">刪除</button></td>
+                        <!-- <td><button type="button" onclick="removeRow(this)" class="admin-button" style="background-color: #dc3545;">刪除</button></td> -->
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -217,10 +217,10 @@
             cell7.innerHTML = '<button type="button" onclick="removeRow(this)" class="admin-button" style="background-color: #dc3545;">刪除</button>';
         }
         
-        function removeRow(button) {
-            const row = button.parentNode.parentNode;
-            row.parentNode.removeChild(row);
-        }
+        // function removeRow(button) {
+        //     const row = button.parentNode.parentNode;
+        //     row.parentNode.removeChild(row);
+        // }
     </script>
 </body>
 </html> 

@@ -55,6 +55,13 @@
         .admin-button:hover {
             background-color: #404040 !important; /* 深灰色 */
         }
+
+        .sales-return-button {
+            background-color: #008080 !important; /* 青色 (Teal) */
+        }
+        .sales-return-button:hover {
+            background-color: #006666 !important; /* 深青色 */
+        }
     </style>
 </head>
 <body>
@@ -64,6 +71,7 @@
             <button class="big-button purchase-button" onclick="location.href='{{ url_for('main_routes.purchase') }}'">進貨登記</button>
             <button class="big-button return-button" onclick="location.href='{{ url_for('main_routes.return_goods') }}'">退貨登記</button>
             <button class="big-button sale-button" onclick="location.href='{{ url_for('main_routes.sale') }}'">銷售登記</button>
+            <button class="big-button sales-return-button" onclick="location.href='{{ url_for('main_routes.sales_return') }}'">銷貨退回</button>
             <button class="big-button inventory-button" onclick="location.href='{{ url_for('main_routes.inventory') }}'">查看庫存</button>
             <button class="big-button shift-sales-button" onclick="location.href='{{ url_for('main_routes.shift_sales') }}'">班別銷售查詢</button>
             <button class="big-button report-button" onclick="location.href='{{ url_for('main_routes.generate_reports_route') }}'">產生月報表</button>

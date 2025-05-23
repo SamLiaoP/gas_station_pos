@@ -1,8 +1,8 @@
 from flask import render_template, request, redirect, url_for, jsonify, Blueprint, send_file, session, flash
 from utils.common import get_taiwan_time, logger, get_current_shift
-from models.data_manager import get_staff_and_farmers, read_inventory, add_new_farmer, read_master_data, save_master_data
-from models.inventory import get_product_details, get_products_by_supplier
-from models.transactions import record_purchase, record_sale, record_return
+from models.data_manager import get_staff_and_farmers, read_inventory, add_new_farmer, read_master_data, save_master_data, read_transactions
+from models.inventory import get_product_details, get_products_by_supplier, get_product_avg_purchase_price, get_product_names_from_purchase_history
+from models.transactions import record_purchase, record_sale, record_return, record_sales_return
 from models.report_generator import generate_reports
 from flask_login import login_required, current_user
 from auth import authorized_required
@@ -610,3 +610,173 @@ def admin_logout():
     logger.info("管理員登出")
     flash("已成功登出")
     return redirect(url_for('main_routes.index'))
+
+# 銷貨退回頁面
+@main_routes.route('/sales_return', methods=['GET', 'POST'])
+@login_required
+@authorized_required
+def sales_return():
+    if request.method == 'POST':
+        try:
+            original_transaction_id = request.form.get('original_transaction_id')
+            staff = request.form.get('staff') # 處理退貨的員工，前端需要提交
+            reason = request.form.get('reason', '') # 退貨原因，可選
+
+            if not original_transaction_id:
+                logger.error("[銷退POST] 未提供原始交易ID")
+                flash("錯誤：未選擇要退貨的原始銷售記錄。", "danger")
+                return redirect(url_for('main_routes.sales_return')) # 重定向回銷退頁面
+            
+            if not staff:
+                logger.error("[銷退POST] 未提供處理員工")
+                flash("錯誤：未選擇處理員工。", "danger")
+                # 可能需要將篩選條件和其他狀態傳回，以便用戶重新選擇
+                # 暫時簡單重定向
+                return redirect(url_for('main_routes.sales_return'))
+
+            logger.info(f"[銷退POST] 請求整單退貨：原始交易ID={original_transaction_id}, 員工={staff}, 原因={reason}")
+
+            # 調用更新後的 record_sales_return 函數
+            new_transaction_id = record_sales_return(original_transaction_id, staff, reason)
+
+            if new_transaction_id:
+                logger.info(f"銷貨退回記錄成功 (整單退貨): 新交易ID {new_transaction_id} 對應原單 {original_transaction_id}")
+                flash(f"銷售單號 {original_transaction_id} 已成功整單退貨。新銷退單號為 {new_transaction_id}。庫存已更新。", "success")
+                return redirect(url_for('main_routes.select_operation'))
+            else:
+                logger.error(f"銷貨退回記錄失敗 (整單退貨) for original ID: {original_transaction_id}")
+                flash(f"銷售單號 {original_transaction_id} 整單退貨失敗。請檢查日誌或聯繫管理員。", "error")
+                # 為了更好的用戶體驗，可以考慮將用戶之前的篩選條件等信息帶回到頁面
+                # 但這會使GET請求的渲染變得複雜，暫時簡單重定向
+                return redirect(url_for('main_routes.sales_return')) 
+
+        except Exception as e:
+            logger.error(f"銷貨退回 (POST) 發生未知錯誤: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            flash("處理銷貨退回時發生未知錯誤，請聯繫管理員。", "danger")
+            return redirect(url_for('main_routes.sales_return'))
+
+    # GET 請求：準備篩選和顯示歷史銷售記錄的頁面
+    staff_list, supplier_list = get_staff_and_farmers()
+    shifts = ['早班', '午班', '晚班']
+    current_shift = get_current_shift()
+    today = get_taiwan_time().strftime('%Y-%m-%d')
+
+    logger.info(f"訪問銷貨退回頁面 (GET)，準備篩選銷售記錄")
+    # 注意：模板現在需要大幅修改，不再是填寫表單，而是顯示篩選器和銷售列表
+    return render_template('sales_return.html', 
+                           staff_list=staff_list, 
+                           supplier_list=supplier_list, 
+                           shifts=shifts,
+                           current_shift=current_shift,
+                           today=today,
+                           form_data={}) # form_data 可能不再需要，或用於保存篩選條件
+
+# API路由：取得廠商的產品列表 (用於銷退，包含所有曾記錄的產品，不僅限於有庫存)
+@main_routes.route('/api/supplier_products_for_return/<supplier_name>')
+@login_required
+@authorized_required
+def api_supplier_products_for_return(supplier_name):
+    try:
+        logger.info(f"API請求廠商產品 (銷退用，基於進貨歷史): '{supplier_name}'")
+        
+        # 使用新函數從進貨歷史獲取產品名稱
+        product_names = get_product_names_from_purchase_history(supplier_name)
+
+        if not product_names:
+            logger.warning(f"從進貨歷史中找不到廠商 '{supplier_name}' 的任何產品 (銷退API)")
+            # 即使沒有歷史進貨記錄，也返回空列表，讓前端處理
+            return jsonify({"products": []}) 
+            
+        logger.info(f"銷退API (進貨歷史): 廠商 '{supplier_name}' 返回 {len(product_names)} 個產品名稱: {product_names}")
+        response = jsonify({"products": product_names})
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return response
+    except Exception as e:
+        logger.error(f"獲取廠商產品 (銷退用，基於進貨歷史) 時發生錯誤: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"error": f"發生錯誤: {str(e)}"}), 500
+
+# API路由：取得產品單位的平均進貨價 (用於銷退預填價格)
+@main_routes.route('/api/product_unit_avg_purchase_price/<product_name>/<unit>')
+@login_required
+@authorized_required
+def api_product_unit_avg_purchase_price(product_name, unit):
+    try:
+        logger.info(f"API請求產品單位平均進貨價: '{product_name}', 單位: '{unit}'")
+        avg_price = get_product_avg_purchase_price(product_name, unit)
+        if avg_price is not None:
+            response = jsonify({"product_name": product_name, "unit": unit, "avg_purchase_price": avg_price})
+        else:
+            # 如果沒有進貨記錄，可以返回一個標識或售價
+            product_info = get_product_details(product_name=product_name)
+            current_sale_price = 0
+            if product_info:
+                unit_detail = next((u for u in product_info.get('units_info', []) if u['unit'] == unit), None)
+                if unit_detail:
+                    current_sale_price = unit_detail.get('unit_price', 0) # 取當前售價作為備用
+            logger.warning(f"產品 '{product_name}' 單位 '{unit}' 找不到平均進貨價，嘗試返回售價 {current_sale_price}")
+            response = jsonify({"product_name": product_name, "unit": unit, "avg_purchase_price": current_sale_price, "note": "未找到進貨價，預設為當前售價"})
+
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return response
+    except Exception as e:
+        logger.error(f"獲取產品單位平均進貨價時發生錯誤: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"error": f"發生錯誤: {str(e)}"}), 500
+
+@main_routes.route('/api/sales_transactions_for_return')
+@login_required
+@authorized_required
+def api_sales_transactions_for_return():
+    try:
+        supplier_name = request.args.get('supplier_name')
+        product_name = request.args.get('product_name')
+        unit = request.args.get('unit')
+
+        logger.info(f"API請求銷售記錄 (銷退用): 廠商={supplier_name or '所有'}, 產品={product_name or '所有'}, 單位={unit or '所有'}")
+
+        sales_df = read_transactions(transaction_type='銷售')
+
+        if sales_df.empty:
+            return jsonify({"transactions": []})
+
+        # 根據提供的參數進行篩選
+        if supplier_name:
+            # 注意：transactions 表中 '銷售' 記錄的 '供應商' 欄位是基於當時庫存產品的供應商。
+            # read_transactions 返回的 DataFrame 中，此欄位名為 '供應商'
+            sales_df = sales_df[sales_df['供應商'] == supplier_name]
+        
+        if product_name:
+            # 假設產品名稱欄位在 DataFrame 中是 '產品名稱'
+            sales_df = sales_df[sales_df['產品名稱'] == product_name]
+        
+        if unit:
+            # 假設單位欄位在 DataFrame 中是 '單位'
+            sales_df = sales_df[sales_df['單位'] == unit]
+        
+        # 按日期和時間降序排列，最新的在前面
+        if not sales_df.empty:
+            # 假設日期和時間欄位在 DataFrame 中是 '日期' 和 '時間'
+            sales_df = sales_df.sort_values(by=['日期', '時間'], ascending=[False, False])
+        
+        MAX_RECORDS_TO_SHOW = 50 
+        # 根據 read_transactions 的 SELECT 語句，確認返回的欄位名
+        columns_to_show = ['日期', '時間', '班別', '產品名稱', '單位', '數量', '單價', '總價', '員工', '供應商']
+        existing_columns = [col for col in columns_to_show if col in sales_df.columns]
+        filtered_sales_df = sales_df[existing_columns].head(MAX_RECORDS_TO_SHOW)
+
+        transactions = filtered_sales_df.to_dict('records')
+        
+        response = jsonify({"transactions": transactions})
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return response
+
+    except Exception as e:
+        logger.error(f"獲取銷售記錄 (銷退用) 時發生錯誤: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"error": f"發生錯誤: {str(e)}"}), 500
